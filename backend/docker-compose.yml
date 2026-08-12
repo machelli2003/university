@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: eump-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build: .
+    container_name: eump-backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build: .
+    container_name: eump-celery-worker
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    command: celery -A app.infrastructure.queue.celery_config worker --loglevel=info
+
+volumes:
+  redis_data:
