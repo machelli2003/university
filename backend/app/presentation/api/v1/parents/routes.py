@@ -3,7 +3,7 @@ from typing import List
 from app.presentation.api.v1.parents.schemas import LinkStudentRequest, GuardianStudentResponse
 from app.infrastructure.database.repositories.guardian_repository import GuardianRepository
 from app.infrastructure.database.repositories.student_repository import StudentRepository
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_student_repo, require_roles
 from app.infrastructure.models.user import User
 
 router = APIRouter()
@@ -11,12 +11,14 @@ router = APIRouter()
 def get_guardian_repo() -> GuardianRepository:
     return GuardianRepository()
 
-def get_student_repo() -> StudentRepository:
-    return StudentRepository()
-
 
 @router.post("/parents/link")
-async def link_student(request: LinkStudentRequest, current_user: User = Depends(get_current_user), guardian_repo=Depends(get_guardian_repo), student_repo=Depends(get_student_repo)):
+async def link_student(
+    request: LinkStudentRequest,
+    current_user: User = Depends(require_roles("parent_guardian", "university_admin", "super_admin")),
+    guardian_repo=Depends(get_guardian_repo),
+    student_repo=Depends(get_student_repo),
+):
     # verify student exists
     s = await student_repo.get_by_student_id(current_user.tenant_id or "default", request.student_id)
     if not s:
@@ -26,7 +28,11 @@ async def link_student(request: LinkStudentRequest, current_user: User = Depends
 
 
 @router.get("/parents/students", response_model=List[GuardianStudentResponse])
-async def list_linked_students(current_user: User = Depends(get_current_user), guardian_repo=Depends(get_guardian_repo), student_repo=Depends(get_student_repo)):
+async def list_linked_students(
+    current_user: User = Depends(require_roles("parent_guardian", "university_admin", "super_admin")),
+    guardian_repo=Depends(get_guardian_repo),
+    student_repo=Depends(get_student_repo),
+):
     ids = await guardian_repo.get_students(current_user.tenant_id or "default", str(current_user.id))
     students = []
     for sid in ids:

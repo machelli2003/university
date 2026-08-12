@@ -8,6 +8,7 @@ export type UserRole =
   | "finance_officer"
   | "hostel_administrator"
   | "librarian"
+  | "counselor"
   | "lecturer"
   | "student"
   | "applicant"

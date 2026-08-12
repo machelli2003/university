@@ -14,6 +14,7 @@ class RoleEnum(str, Enum):
     FINANCE_OFFICER = "finance_officer"
     HOSTEL_ADMINISTRATOR = "hostel_administrator"
     LIBRARIAN = "librarian"
+    COUNSELOR = "counselor"
     LECTURER = "lecturer"
     STUDENT = "student"
     APPLICANT = "applicant"

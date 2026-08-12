@@ -5,7 +5,7 @@ from app.presentation.api.v1.health.schemas import (
 from app.infrastructure.database.repositories.health_repository import (
     HealthRecordRepository, ClinicAppointmentRepository, CounselingRepository
 )
-from app.dependencies import get_current_user, require_roles
+from app.dependencies import get_current_user, require_roles, get_student_repo
 from app.infrastructure.models.user import User
 
 router = APIRouter()
@@ -64,12 +64,16 @@ async def request_counseling(
     request: CounselingRequestSchema,
     current_user: User = Depends(get_current_user),
     counseling_repo=Depends(get_counseling_repo),
+    student_repo=Depends(get_student_repo),
 ):
     from datetime import datetime
+    student = await student_repo.get_by_user_id(current_user.tenant_id or "default", str(current_user.id))
+    student_id = student.student_id if student else str(current_user.id)
     counseling = await counseling_repo.create({
         "tenant_id": current_user.tenant_id or "default",
-        "student_id": str(current_user.id) if request.is_anonymous else str(current_user.id),
+        "student_id": student_id,
+        "requested_by": str(current_user.id),
         "request_date": datetime.utcnow(),
-        **request.dict()
+        **request.dict(),
     })
     return {"id": str(counseling.id), "status": "pending"}

@@ -85,6 +85,7 @@ from app.presentation.api.v1.lecturer import routes as lecturer_routes
 from app.presentation.api.v1.lecturer import course_materials as lecturer_course_materials
 from app.presentation.api.v1.attendance import routes as attendance_routes
 from app.presentation.api.v1.parents import routes as parents_routes
+from app.presentation.api.v1.counseling import routes as counseling_routes
 
 app = FastAPI(
     title="EUMP API",
@@ -135,6 +136,7 @@ app.include_router(lecturer_routes.router, prefix="/api/v1/lecturer", tags=["lec
 app.include_router(lecturer_course_materials.router, prefix="/api/v1/lecturer", tags=["lecturer"])
 app.include_router(attendance_routes.router, prefix="/api/v1/attendance", tags=["attendance"])
 app.include_router(parents_routes.router, prefix="/api/v1", tags=["parents"])
+app.include_router(counseling_routes.router, prefix="/api/v1", tags=["counseling"])
 
 @app.get("/health")
 async def health():
