@@ -48,7 +48,7 @@ class SubmitManualResultsUseCase:
 
         await self.applicant_repo.update(applicant_id, {
             "results": results,
-            "status": ApplicationStatusEnum.RESULTS_UPLOADED,
+            "status": ApplicationStatusEnum.RESULTS_UPLOADED.value,
             "updated_at": datetime.utcnow(),
         })
 
@@ -76,7 +76,7 @@ class ApproveResultsUseCase:
         if not applicant:
             raise ValueError("Applicant not found")
 
-        if applicant.status != "results_uploaded":
+        if applicant.status not in [ApplicationStatusEnum.RESULTS_UPLOADED.value, ApplicationStatusEnum.RESULTS_UPLOADED]:
             raise ValueError(f"Cannot approve results in status: {applicant.status}")
 
         if aggregate is None:
@@ -96,7 +96,7 @@ class ApproveResultsUseCase:
             "aggregate": aggregate,
             "results_approved_by": approved_by,
             "results_approved_at": datetime.utcnow(),
-            "status": "results_approved",
+            "status": ApplicationStatusEnum.RESULTS_APPROVED.value,
             "updated_at": datetime.utcnow(),
         })
 

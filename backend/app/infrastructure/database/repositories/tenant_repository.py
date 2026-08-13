@@ -16,3 +16,9 @@ class TenantRepository(BaseRepository[Tenant]):
 
     async def get_by_subdomain(self, subdomain: str) -> Optional[Tenant]:
         return await self.model.find_one({"subdomain": subdomain})
+
+    async def get_by_school_code(self, school_code: str) -> Optional[Tenant]:
+        return await self.model.find_one({"school_code": school_code})
+
+    async def exists(self, **kwargs) -> bool:
+        return await self.model.find_one(kwargs) is not None

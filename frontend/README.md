@@ -67,6 +67,7 @@ Register a fresh applicant via `/register`, or use the seeded one above.
 - Dashboards/UI for the other 20 backend modules (Finance/Paystack checkout, Academic course
   registration, Exam grading, Accommodation, Library, HR, Health, Research, Alumni,
   Communication, Documents, Workflow, Inventory, Analytics)
+- University tenant onboarding flows for super-admin and university-admin workflows
 - Student portal (post-enrollment) — course registration, grades, transcripts, fee payment
 - Admin dashboards with charts (Recharts)
 - File uploads (documents, profile photos) — backend currently stubs S3

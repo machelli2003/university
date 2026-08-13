@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from app.presentation.api.v1.academic.schemas import (
     CreateFacultyRequest, CreateDepartmentRequest, CreateProgramRequest,
-    CreateCourseRequest, RegisterCoursesRequest, CourseResponse, ProgramResponse
+    CreateCourseRequest, RegisterCoursesRequest, CourseResponse, ProgramResponse,
+    CreateAcademicCalendarRequest, UpdateAcademicCalendarRequest,
 )
 from app.application.academic.register_courses import RegisterCoursesUseCase
 from app.dependencies import (

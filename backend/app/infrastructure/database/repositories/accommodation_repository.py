@@ -1,6 +1,8 @@
 from app.infrastructure.models.accommodation import Hall, Room, Accommodation, MaintenanceRequest
 from app.infrastructure.database.repositories.base_repository import BaseRepository
 from typing import List, Optional
+from bson import ObjectId
+from pymongo import ReturnDocument
 
 class HallRepository(BaseRepository[Hall]):
     def __init__(self):
@@ -25,6 +27,38 @@ class RoomRepository(BaseRepository[Room]):
             "hall_id": hall_id,
             "occupied": {"$lt": "capacity"}
         }).to_list(None)
+
+    async def allocate_if_space(self, room_id: str, student_id: str) -> Optional[Room]:
+        """Atomically allocate a student to a room if occupied < capacity and student not already present.
+
+        Returns the updated Room document or None if allocation failed (full or already allocated).
+        """
+        coll = self.model.get_motor_collection()
+        filter_query = {
+            "_id": ObjectId(room_id),
+            "$expr": {"$lt": ["$occupied", "$capacity"]},
+            "students": {"$ne": student_id},
+        }
+        update = {"$inc": {"occupied": 1}, "$push": {"students": student_id}}
+        doc = await coll.find_one_and_update(filter_query, update, return_document=ReturnDocument.AFTER)
+        if not doc:
+            return None
+        # convert raw doc to model instance
+        return await self.model.get(str(doc.get("_id")))
+
+    async def deallocate_student(self, room_id: str, student_id: str) -> Optional[Room]:
+        """Atomically remove a student from a room and decrement occupied (min 0)."""
+        coll = self.model.get_motor_collection()
+        filter_query = {
+            "_id": ObjectId(room_id),
+            "students": student_id,
+            "$expr": {"$gt": ["$occupied", 0]},
+        }
+        update = {"$inc": {"occupied": -1}, "$pull": {"students": student_id}}
+        doc = await coll.find_one_and_update(filter_query, update, return_document=ReturnDocument.AFTER)
+        if not doc:
+            return None
+        return await self.model.get(str(doc.get("_id")))
 
 class AccommodationRepository(BaseRepository[Accommodation]):
     def __init__(self):

@@ -5,12 +5,34 @@ import { ROUTES } from "@/constants/routes"
 import LoginPage from "@/pages/auth/LoginPage"
 import RegisterPage from "@/pages/auth/RegisterPage"
 import DashboardPage from "@/pages/DashboardPage"
+
+// Applicant Portal Pages (Section 33-34)
+import ApplicantPortalLandingPage from "@/pages/applicant/ApplicantPortalLandingPage"
+import ApplicantPortalLoginPage from "@/pages/applicant/ApplicantPortalLoginPage"
+import ApplicantPortalRegistrationPage from "@/pages/applicant/ApplicantPortalRegistrationPage"
+import ApplicantPortalDashboardPage from "@/pages/applicant/ApplicantPortalDashboardPage"
+import ApplicantWASSCEEntryPage from "@/pages/applicant/ApplicantWASSCEEntryPage"
+
 import ApplicationStatusPage from "@/pages/applicant/ApplicationStatusPage"
 import PendingResultsPage from "@/pages/officer/PendingResultsPage"
 import ApplicantsListPage from "@/pages/officer/ApplicantsListPage"
 import ProcessingPage from "@/pages/officer/ProcessingPage"
 import ApplicantDetailPage from "@/pages/officer/ApplicantDetailPage"
 import WaitlistPage from "@/pages/officer/WaitlistPage"
+import OfficerWASSCEVerificationPage from "@/pages/officer/OfficerWASSCEVerificationPage"
+import AdmissionsOfficerDashboardPage from "@/pages/officer/AdmissionsOfficerDashboardPage"
+import RegistrarDashboardPage from "@/pages/officer/RegistrarDashboardPage"
+import HODDashboardPage from "@/pages/officer/HODDashboardPage"
+import DeanDashboardPage from "@/pages/officer/DeanDashboardPage"
+import FinanceOfficerDashboardPage from "@/pages/officer/FinanceOfficerDashboardPage"
+import HostelAdminDashboardPage from "@/pages/officer/HostelAdminDashboardPage"
+import LibrarianDashboardPage from "@/pages/officer/LibrarianDashboardPage"
+import ExamOfficerDashboardPage from "@/pages/officer/ExamOfficerDashboardPage"
+import StudentDashboardPageOfficer from "@/pages/officer/StudentDashboardPage"
+import AlumniDashboardPage from "@/pages/officer/AlumniDashboardPage"
+import TenantAdminDashboardPage from "@/pages/officer/TenantAdminDashboardPage"
+import SuperAdminDashboardPage from "@/pages/officer/SuperAdminDashboardPage"
+import LecturerDashboardPageV2 from "@/pages/lecturer/LecturerDashboardPageV2"
 
 import CourseRegistrationPage from "@/pages/academic/CourseRegistrationPage"
 import PaymentsPage from "@/pages/finance/PaymentsPage"
@@ -42,12 +64,15 @@ import DeanPage from "@/pages/admin/DeanPage"
 import FinanceOfficerPage from "@/pages/admin/FinanceOfficerPage"
 import SuperAdminPage from "@/pages/admin/SuperAdminPage"
 import AuditorPage from "@/pages/admin/AuditorPage"
+import UniversityApplicationsPage from "@/pages/admin/UniversityApplicationsPage"
 import StudentDashboardPage from "@/pages/student/StudentDashboardPage"
 import LecturerDashboardPage from "@/pages/lecturer/LecturerDashboardPage"
 import AttendancePage from "@/pages/lecturer/AttendancePage"
 import LecturerRosterPage from "@/pages/lecturer/LecturerRosterPage"
 import AttendanceReportPage from "@/pages/lecturer/AttendanceReportPage"
 import CourseMaterialsPage from "@/pages/lecturer/CourseMaterialsPage"
+import GradeSubmissionPage from "@/pages/lecturer/GradeSubmissionPage"
+import GradeStatisticsPage from "@/pages/lecturer/GradeStatisticsPage"
 import QRCodeAttendancePage from "@/pages/attendance/QRCodeAttendancePage"
 import PublicAttendanceForm from "@/pages/attendance/PublicAttendanceForm"
 import HostelAdminPage from "@/pages/accommodation/HostelAdminPage"
@@ -75,10 +100,75 @@ export function AppRoutes() {
       <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
       <Route path={ROUTES.UNAUTHORIZED} element={<UnauthorizedPage />} />
 
+      {/* Applicant Portal Routes (Section 33-34) */}
+      <Route path="/apply/:schoolCode" element={<ApplicantPortalLandingPage />} />
+      <Route path="/apply/:schoolCode/login" element={<ApplicantPortalLoginPage />} />
+      <Route path="/apply/:schoolCode/register" element={<ApplicantPortalRegistrationPage />} />
+      <Route path="/apply/:schoolCode/dashboard" element={<ApplicantPortalDashboardPage />} />
+      <Route path="/apply/:schoolCode/wassce" element={<ApplicantWASSCEEntryPage />} />
+      {/* Additional applicant portal pages will be added in next sections */}
+
       <Route path={ROUTES.DASHBOARD} element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
 
       {/* Admissions */}
       <Route path={ROUTES.APPLICATION_STATUS} element={<PrivateRoute><ApplicationStatusPage /></PrivateRoute>} />
+      {/* Officer Dashboards */}
+      <Route
+        path="/officer/dashboard/admissions"
+        element={<PrivateRoute allowedRoles={OFFICER_ROLES}><AdmissionsOfficerDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/registrar"
+        element={<PrivateRoute allowedRoles={OFFICER_ROLES}><RegistrarDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/lecturer"
+        element={<PrivateRoute allowedRoles={["lecturer", "head_of_department", "dean"]}><LecturerDashboardPageV2 /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/hod"
+        element={<PrivateRoute allowedRoles={["head_of_department", "dean", "university_admin", "super_admin"]}><HODDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/dean"
+        element={<PrivateRoute allowedRoles={["dean", "university_admin", "super_admin"]}><DeanDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/finance"
+        element={<PrivateRoute allowedRoles={["finance_officer", "university_admin", "super_admin"]}><FinanceOfficerDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/hostel"
+        element={<PrivateRoute allowedRoles={["hostel_administrator", "university_admin", "super_admin"]}><HostelAdminDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/librarian"
+        element={<PrivateRoute allowedRoles={["librarian", "university_admin", "super_admin"]}><LibrarianDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/exam"
+        element={<PrivateRoute allowedRoles={["examination_officer", "university_admin", "super_admin"]}><ExamOfficerDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/student"
+        element={<PrivateRoute allowedRoles={["student"]}><StudentDashboardPageOfficer /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/alumni"
+        element={<PrivateRoute allowedRoles={["alumni_officer", "university_admin", "super_admin"]}><AlumniDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/tenant_admin"
+        element={<PrivateRoute allowedRoles={["university_admin"]}><TenantAdminDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/dashboard/super_admin"
+        element={<PrivateRoute allowedRoles={["super_admin"]}><SuperAdminDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path="/officer/wassce-verification"
+        element={<PrivateRoute allowedRoles={OFFICER_ROLES}><OfficerWASSCEVerificationPage /></PrivateRoute>}
+      />
       <Route
         path={ROUTES.OFFICER_PENDING_RESULTS}
         element={<PrivateRoute allowedRoles={OFFICER_ROLES}><PendingResultsPage /></PrivateRoute>}
@@ -211,6 +301,10 @@ export function AppRoutes() {
         element={<PrivateRoute allowedRoles={["auditor", "university_admin", "super_admin"]}><AuditorPage /></PrivateRoute>}
       />
       <Route
+        path={ROUTES.ADMIN_UNIVERSITY_APPLICATIONS}
+        element={<PrivateRoute allowedRoles={["super_admin", "university_admin"]}><UniversityApplicationsPage /></PrivateRoute>}
+      />
+      <Route
         path={ROUTES.STUDENT_DASHBOARD}
         element={<PrivateRoute allowedRoles={["student"]}><StudentDashboardPage /></PrivateRoute>}
       />
@@ -233,6 +327,14 @@ export function AppRoutes() {
       <Route
         path={"/lecturer/courses/:courseId/attendance/report"}
         element={<PrivateRoute allowedRoles={["lecturer"]}><AttendanceReportPage /></PrivateRoute>}
+      />
+      <Route
+        path={"/lecturer/grades/submit"}
+        element={<PrivateRoute allowedRoles={["lecturer"]}><GradeSubmissionPage /></PrivateRoute>}
+      />
+      <Route
+        path={"/lecturer/grades/statistics"}
+        element={<PrivateRoute allowedRoles={["lecturer"]}><GradeStatisticsPage /></PrivateRoute>}
       />
       <Route
         path={"/attendance/mark/:courseId/:sessionId"}

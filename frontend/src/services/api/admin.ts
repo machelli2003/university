@@ -7,6 +7,9 @@ interface AdminApi {
   updateUser(id: string, data: any): Promise<AxiosResponse<any>>
   unlockUser(id: string): Promise<AxiosResponse<any>>
   deleteUser(id: string): Promise<AxiosResponse<any>>
+  impersonate(tenantId: string): Promise<AxiosResponse<any>>
+  stopImpersonation(tenantId?: string): Promise<AxiosResponse<any>>
+  listImpersonations(limit?: number): Promise<AxiosResponse<any>>
 }
 
 export const adminApi: AdminApi = {
@@ -16,4 +19,7 @@ export const adminApi: AdminApi = {
   updateUser: (id: string, data: any) => apiClient.put(`/admin/users/${id}`, data),
   unlockUser: (id: string) => apiClient.patch(`/admin/users/${id}/unlock`),
   deleteUser: (id: string) => apiClient.delete(`/admin/users/${id}`),
+  impersonate: (tenantId: string) => apiClient.post(`/admin/impersonate`, { tenant_id: tenantId }),
+  stopImpersonation: (tenantId?: string) => apiClient.post(`/admin/impersonate/stop`, null, { params: tenantId ? { tenant_id: tenantId } : undefined }),
+  listImpersonations: (limit = 100) => apiClient.get(`/admin/impersonations`, { params: { limit } }),
 }

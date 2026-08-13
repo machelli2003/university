@@ -59,6 +59,7 @@ export const ROUTES = {
   ADMIN_DASHBOARD: "/admin",
   ADMIN_USERS: "/admin/users",
   ADMIN_TENANT_SETTINGS: "/admin/tenant-settings",
+  ADMIN_UNIVERSITY_APPLICATIONS: "/admin/university-applications",
   STUDENT_DASHBOARD: "/student",
   LECTURER_DASHBOARD: "/lecturer",
   HOSTEL_ADMIN: "/hostel",

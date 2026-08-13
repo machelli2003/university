@@ -3,6 +3,7 @@ from .applicant import Applicant, ApplicantResult
 from .student import Student
 from .academic import Course, Program, Faculty, Department, Curriculum, Accreditation, Registration, AcademicCalendar
 from .finance import Payment, Scholarship, FeeStructure
+from .financial_clearance import FinancialClearance, ClearanceStatusEnum
 from .exam import Grade, Transcript, Assessment, GradeAppeal
 from .accommodation import Hall, Room, Accommodation, MaintenanceRequest
 from .attendance import Attendance
@@ -15,6 +16,7 @@ from .communication import Notification, NotificationTemplate, Campaign
 from .document import Document, DigitalSignature
 from .workflow import Workflow, WorkflowInstance, ApprovalTask
 from .tenant import Tenant, Subscription
+from .university_application import UniversityApplication, IdentifierSequence
 from .inventory import Inventory, Asset, MaintenanceSchedule
 from .timetable import Timetable, Venue, TimeSlot
 from .audit import AuditLog
@@ -25,6 +27,7 @@ __all__ = [
     "Student",
     "Course", "Program", "Faculty", "Department", "Curriculum", "Accreditation", "Registration", "AcademicCalendar",
     "Payment", "Scholarship", "FeeStructure",
+    "FinancialClearance", "ClearanceStatusEnum",
     "Grade", "Transcript", "Assessment", "GradeAppeal",
     "Hall", "Room", "Accommodation", "MaintenanceRequest",
     "Attendance",
@@ -37,6 +40,7 @@ __all__ = [
     "Document", "DigitalSignature",
     "Workflow", "WorkflowInstance", "ApprovalTask",
     "Tenant", "Subscription",
+    "UniversityApplication", "IdentifierSequence",
     "Inventory", "Asset", "MaintenanceSchedule",
     "Timetable", "Venue", "TimeSlot",
     "AuditLog",

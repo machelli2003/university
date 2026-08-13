@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from app.config import get_settings
 from app.infrastructure.database.connection import init_db, close_db
+from app.infrastructure.middleware.authorization_middleware import TenantIsolationMiddleware
 from app.exceptions import DomainException, domain_exception_handler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -68,6 +69,7 @@ from app.presentation.api.v1.admissions import routes as admissions_routes
 from app.presentation.api.v1.finance import routes as finance_routes
 from app.presentation.api.v1.exam import routes as exam_routes
 from app.presentation.api.v1.admin import routes as admin_routes
+from app.presentation.api.v1.onboarding import routes as onboarding_routes
 from app.presentation.api.v1.academic import routes as academic_routes
 from app.presentation.api.v1.accommodation import routes as accommodation_routes
 from app.presentation.api.v1.library import routes as library_routes
@@ -86,6 +88,22 @@ from app.presentation.api.v1.lecturer import course_materials as lecturer_course
 from app.presentation.api.v1.attendance import routes as attendance_routes
 from app.presentation.api.v1.parents import routes as parents_routes
 from app.presentation.api.v1.counseling import routes as counseling_routes
+from app.presentation.api.v1.applicant_portal import routes as applicant_portal_routes
+from app.presentation.api.v1.admissions import wassce_verification_routes as wassce_verification
+from app.presentation.api.v1.staff import staff_assignment_routes as staff_assignment_routes
+from app.presentation.api.v1.dashboards import admissions_officer_dashboard as admissions_officer_dashboard
+from app.presentation.api.v1.dashboards import registrar_dashboard as registrar_dashboard
+from app.presentation.api.v1.dashboards import lecturer_dashboard as lecturer_dashboard
+from app.presentation.api.v1.dashboards import hod_dashboard as hod_dashboard
+from app.presentation.api.v1.dashboards import dean_dashboard as dean_dashboard
+from app.presentation.api.v1.dashboards import finance_dashboard as finance_dashboard
+from app.presentation.api.v1.dashboards import hostel_dashboard as hostel_dashboard
+from app.presentation.api.v1.dashboards import librarian_dashboard as librarian_dashboard
+from app.presentation.api.v1.dashboards import exam_dashboard as exam_dashboard
+from app.presentation.api.v1.dashboards import student_dashboard as student_dashboard
+from app.presentation.api.v1.dashboards import alumni_dashboard as alumni_dashboard
+from app.presentation.api.v1.dashboards import tenant_admin_dashboard as tenant_admin_dashboard
+from app.presentation.api.v1.dashboards import super_admin_dashboard as super_admin_dashboard
 
 app = FastAPI(
     title="EUMP API",
@@ -104,6 +122,7 @@ app.add_middleware(
 )
 
 app.add_middleware(AuditMiddleware)
+app.add_middleware(TenantIsolationMiddleware)
 app.add_exception_handler(DomainException, domain_exception_handler)
 
 @app.on_event("startup")
@@ -115,6 +134,7 @@ async def shutdown():
     await close_db()
 
 app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(onboarding_routes.router, prefix="/api/v1/onboarding", tags=["onboarding"])
 app.include_router(admissions_routes.router, prefix="/api/v1/admissions", tags=["admissions"])
 app.include_router(finance_routes.router, prefix="/api/v1/finance", tags=["finance"])
 app.include_router(exam_routes.router, prefix="/api/v1/exam", tags=["exam"])
@@ -137,6 +157,22 @@ app.include_router(lecturer_course_materials.router, prefix="/api/v1/lecturer", 
 app.include_router(attendance_routes.router, prefix="/api/v1/attendance", tags=["attendance"])
 app.include_router(parents_routes.router, prefix="/api/v1", tags=["parents"])
 app.include_router(counseling_routes.router, prefix="/api/v1", tags=["counseling"])
+app.include_router(applicant_portal_routes.router, prefix="/api/v1", tags=["applicant-portal"])
+app.include_router(wassce_verification.router, prefix="/api/v1", tags=["wassce-verification"])
+app.include_router(staff_assignment_routes.router, tags=["staff-assignments"])
+app.include_router(admissions_officer_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(registrar_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(lecturer_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(hod_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(dean_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(finance_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(hostel_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(librarian_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(exam_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(student_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(alumni_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(tenant_admin_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(super_admin_dashboard.router, prefix="/api/v1", tags=["dashboards"])
 
 @app.get("/health")
 async def health():

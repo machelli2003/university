@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Request, Query
 from typing import Any, Dict, List
 from app.presentation.api.v1.finance.schemas import (
-    InitiatePaymentRequest, PaymentListItem, PaymentHistoryItem,
+    InitiatePaymentRequest, PaymentListItem, PaymentHistoryItem, PaymentResponse,
     FeeStructureCreateRequest, FeeStructureUpdateRequest, FeeStructureResponse,
     ScholarshipRequest, ScholarshipResponse,
     BalanceResponse, ClearanceResponse,
@@ -228,7 +228,6 @@ async def get_payment_history(
 
 @router.post("/payments/{payment_id}/confirm", response_model=PaymentResponse)
 async def confirm_payment(
-    payment_id: str,
     payment_id: str,
     current_user: User = Depends(require_roles("finance_officer", "university_admin", "super_admin")),
     payment_repo=Depends(get_payment_repo),

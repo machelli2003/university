@@ -13,6 +13,7 @@ class Tenant(Document):
     name: str
     description: Optional[str] = None
     subdomain: str
+    school_code: Optional[str] = None
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
 
@@ -44,6 +45,13 @@ class Tenant(Document):
         "research": True,
         "alumni": True,
     }
+
+    identifier_formats: dict = Field(default_factory=lambda: {
+        "student_id": "{SCHOOL_CODE}-{YEAR}-{SEQUENCE}",
+        "staff_id": "{SCHOOL_CODE}-STF-{SEQUENCE}",
+        "applicant_id": "{SCHOOL_CODE}-APP-{YEAR}-{SEQUENCE}",
+        "university_application_id": "UAPP-{YEAR}-{SEQUENCE}",
+    })
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -19,3 +19,12 @@ class AttendanceItem(BaseModel):
     session_date: datetime
     is_present: bool
     marked_by: str
+
+class GradeEntry(BaseModel):
+    student_id: str
+    score: float
+    remarks: Optional[str] = None
+
+class GradeSubmissionRequest(BaseModel):
+    grades: List[GradeEntry]
+    submission_notes: Optional[str] = None

@@ -1,6 +1,9 @@
 import { useMemo, type ChangeEvent } from "react"
 import { useAuthStore } from "@/store/authStore"
 import type { Tenant } from "@/types/tenant"
+import { adminApi } from "@/services/api/admin"
+import { getErrorMessage } from "@/services/api/client"
+import { useState } from "react"
 
 interface TenantSwitcherProps {
   tenants: Tenant[]
@@ -9,6 +12,10 @@ interface TenantSwitcherProps {
 export function TenantSwitcher({ tenants }: TenantSwitcherProps) {
   const selectedTenantId = useAuthStore((state) => state.selectedTenantId)
   const setSelectedTenantId = useAuthStore((state) => state.setSelectedTenantId)
+  const startImpersonation = useAuthStore((s) => s.startImpersonation)
+  const stopImpersonation = useAuthStore((s) => s.stopImpersonation)
+  const user = useAuthStore((s) => s.user)
+  const [error, setError] = useState<string | null>(null)
 
   const options = useMemo(
     () => [{ id: "", name: "All tenants" }, ...tenants],
@@ -16,7 +23,35 @@ export function TenantSwitcher({ tenants }: TenantSwitcherProps) {
   )
 
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setSelectedTenantId(event.target.value || null)
+    const newTenant = event.target.value || null
+
+    // If super admin selects a specific tenant, request impersonation token
+    if (user?.role === "super_admin" && newTenant) {
+      setError(null)
+      adminApi.impersonate(newTenant)
+        .then((res) => {
+          const token = res.data?.access_token
+          if (token) {
+            startImpersonation(token, null)
+            setSelectedTenantId(newTenant)
+          } else {
+            setError("Unable to impersonate tenant")
+          }
+        })
+        .catch((err: unknown) => setError(getErrorMessage(err)))
+    } else if (user?.role === "super_admin" && !newTenant) {
+      setError(null)
+      adminApi.stopImpersonation()
+        .then(() => {
+          stopImpersonation()
+          setSelectedTenantId(null)
+        })
+        .catch((err: unknown) => {
+          setError(getErrorMessage(err))
+        })
+    } else {
+      setSelectedTenantId(newTenant)
+    }
   }
 
   return (
@@ -36,6 +71,7 @@ export function TenantSwitcher({ tenants }: TenantSwitcherProps) {
           </option>
         ))}
       </select>
+      {error && <div className="text-xs text-red-500 mt-1">{error}</div>}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useAuthStore } from "@/store/authStore"
 import { useLogout } from "@/hooks/useAuth"
+import { adminApi } from "@/services/api/admin"
 import { tenantApi } from "@/services/api/tenant"
 import { TenantSwitcher } from "@/components/ui/TenantSwitcher"
 import { cn } from "@/lib/utils"
@@ -47,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "My Application", path: "/apply/status", icon: <FileCheck className="h-4 w-4" />, roles: ["applicant"] },
   { label: "Course Registration", path: "/academic/registration", icon: <BookOpen className="h-4 w-4" />, roles: ["student", "applicant"] },
   { label: "Payments", path: "/finance/payments", icon: <Wallet className="h-4 w-4" />, roles: ["student", "applicant", "finance_officer", "university_admin", "super_admin"] },
-  { label: "Accommodation", path: "/accommodation", icon: <Building2 className="h-4 w-4" />, roles: ["student", "applicant", "university_admin", "super_admin"] },
+  { label: "Accommodation", path: "/accommodation", icon: <Building2 className="h-4 w-4" />, roles: ["student", "university_admin", "super_admin"] },
   { label: "Hostel Administration", path: "/hostel", icon: <Building2 className="h-4 w-4" />, roles: ["hostel_administrator", "university_admin", "super_admin"] },
   { label: "Library", path: "/library", icon: <LibraryIcon className="h-4 w-4" />, roles: ["student", "lecturer", "librarian", "university_admin", "super_admin"] },
   { label: "Librarian Tools", path: "/librarian", icon: <LibraryIcon className="h-4 w-4" />, roles: ["librarian", "university_admin", "super_admin"] },
@@ -158,6 +159,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["university_admin", "super_admin"],
   },
   {
+    label: "Tenant Applications",
+    path: "/admin/university-applications",
+    icon: <FileCheck className="h-4 w-4" />,
+    roles: ["super_admin", "university_admin"],
+  },
+  {
     label: "Tenant Settings",
     path: "/admin/tenant-settings",
     icon: <Settings className="h-4 w-4" />,
@@ -179,9 +186,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     staleTime: 1000 * 60 * 5,
   })
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role))
-  )
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    // If item has no role restriction, it's public
+    if (!item.roles) return true
+
+    // If current user is super_admin and hasn't selected a tenant,
+    // only show items that are exclusively for super_admin (enterprise-level)
+    if (user?.role === "super_admin" && !selectedTenantId) {
+      const onlySuper = item.roles.every((r) => r === "super_admin")
+      return onlySuper
+    }
+
+    // Otherwise, show items if user's role is included
+    return user && item.roles.includes(user.role)
+  })
+
+  const isImpersonating = useAuthStore((s) => s.isImpersonating)
+  const stopImpersonationStore = useAuthStore((s) => s.stopImpersonation)
 
   return (
     <div className="flex h-screen bg-paper">
@@ -242,7 +263,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="max-w-6xl mx-auto px-8 py-8">{children}</div>
+        <div className="max-w-6xl mx-auto px-8 py-8">
+          {isImpersonating && (
+            <div className="mb-4 rounded border-l-4 border-yellow-400 bg-yellow-50 px-4 py-3 flex items-center justify-between">
+              <div className="text-sm text-yellow-800">Impersonation active: acting as tenant <span className="font-mono">{selectedTenantId}</span></div>
+              <div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await adminApi.stopImpersonation(selectedTenantId ?? undefined)
+                    } catch (e) {
+                      // ignore
+                    }
+                    stopImpersonationStore()
+                    setSelectedTenantId(null)
+                    navigate("/dashboard")
+                  }}
+                  className="btn btn-sm"
+                >
+                  Stop impersonation
+                </button>
+              </div>
+            </div>
+          )}
+          {children}
+        </div>
       </main>
     </div>
   )

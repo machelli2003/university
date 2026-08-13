@@ -13,6 +13,7 @@ import {
   FlaskConical,
   GraduationCap as AlumniIcon,
   Bell,
+  FileCheck,
   FileText,
   GitBranch,
   Boxes,
@@ -41,6 +42,7 @@ const ADMIN_MODULES = [
   { label: "Dean", path: "/dean", icon: <ShieldCheck className="h-5 w-5" /> },
   { label: "Finance Officer", path: "/finance/officer", icon: <Wallet className="h-5 w-5" /> },
   { label: "Super Admin", path: "/super-admin", icon: <ShieldCheck className="h-5 w-5" /> },
+  { label: "Tenant Applications", path: "/admin/university-applications", icon: <FileCheck className="h-5 w-5" /> },
   { label: "Auditor", path: "/auditor", icon: <FileText className="h-5 w-5" /> },
 ]
 

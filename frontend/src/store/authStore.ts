@@ -6,6 +6,10 @@ interface AuthState {
   user: User | null
   accessToken: string | null
   refreshToken: string | null
+  // Impersonation state
+  originalAccessToken?: string | null
+  originalRefreshToken?: string | null
+  isImpersonating?: boolean
   isAuthenticated: boolean
   applicantId: string | null
   studentId: string | null
@@ -16,6 +20,8 @@ interface AuthState {
   setApplicantId: (id: string) => void
   setStudentId: (id: string | null) => void
   setSelectedTenantId: (tenantId: string | null) => void
+  startImpersonation: (accessToken: string | null, refreshToken: string | null) => void
+  stopImpersonation: () => void
   logout: () => void
 }
 
@@ -34,6 +40,24 @@ export const useAuthStore = create<AuthState>()(
 
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
+
+      startImpersonation: (accessToken, refreshToken) =>
+        set((state) => ({
+          originalAccessToken: state.accessToken,
+          originalRefreshToken: state.refreshToken,
+          accessToken,
+          refreshToken,
+          isImpersonating: true,
+        })),
+
+      stopImpersonation: () =>
+        set((state) => ({
+          accessToken: state.originalAccessToken || null,
+          refreshToken: state.originalRefreshToken || null,
+          originalAccessToken: null,
+          originalRefreshToken: null,
+          isImpersonating: false,
+        })),
 
       setUser: (user) => set({ user }),
 

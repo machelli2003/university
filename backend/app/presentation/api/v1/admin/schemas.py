@@ -21,3 +21,12 @@ class AdminUpdateUserRequest(BaseModel):
     permissions: Optional[List[str]] = None
     login_attempts: Optional[int] = None
     locked_until: Optional[datetime] = None
+
+class ChangeStaffRoleRequest(BaseModel):
+    new_role: str
+    permissions: Optional[List[str]] = None
+    reason: Optional[str] = None
+
+class AddPermissionRequest(BaseModel):
+    permission: str
+    reason: Optional[str] = None

@@ -24,7 +24,10 @@ from app.domain.exam.grade_calculator import GradeCalculator
 from app.infrastructure.external_services.email_service import EmailService, SMSService
 from app.infrastructure.external_services.s3_service import S3Service
 from app.infrastructure.database.repositories.audit_repository import AuditRepository
+from app.infrastructure.database.repositories.university_application_repository import UniversityApplicationRepository, IdentifierSequenceRepository
+from app.application.identifiers.identifier_service import IdentifierService
 from app.infrastructure.models.user import User
+from app.infrastructure.database.connection import get_db
 
 security = HTTPBearer()
 
@@ -106,6 +109,21 @@ def get_audit_repo() -> AuditRepository:
     return AuditRepository()
 
 
+def get_university_application_repo() -> UniversityApplicationRepository:
+    return UniversityApplicationRepository()
+
+
+def get_identifier_sequence_repo() -> IdentifierSequenceRepository:
+    return IdentifierSequenceRepository()
+
+
+def get_identifier_service(
+    sequence_repo: IdentifierSequenceRepository = Depends(get_identifier_sequence_repo),
+    tenant_repo: TenantRepository = Depends(get_tenant_repo),
+) -> IdentifierService:
+    return IdentifierService(sequence_repo, tenant_repo)
+
+
 def get_grade_calculator() -> GradeCalculator:
     return GradeCalculator()
 
@@ -114,6 +132,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     auth_service: AuthService = Depends(get_auth_service),
     user_repo: UserRepository = Depends(get_user_repo),
+    request: Request = None,
 ) -> User:
     token = credentials.credentials
     payload = auth_service.decode_token(token)
@@ -126,6 +145,22 @@ async def get_current_user(
 
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    # If token contains an explicit tenant_id (impersonation), and the
+    # authenticated user is a super_admin, override the in-memory tenant_id
+    # so downstream handlers operate in the acting tenant context.
+    token_tenant = payload.get("tenant_id")
+    try:
+        if token_tenant and user.role.value == "super_admin":
+            setattr(user, "impersonating", True)
+            setattr(user, "impersonated_tenant_id", token_tenant)
+            user.tenant_id = token_tenant
+    except Exception:
+        pass
+
+    if request is not None:
+        request.state.user_id = str(user.id)
+        request.state.tenant_id = getattr(user, "tenant_id", None)
 
     return user
 
