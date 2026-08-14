@@ -4,6 +4,7 @@ Validates staff assignments and permissions for resource access
 Section 57: Resource-Level Authorization
 """
 from typing import Optional, List
+from app.infrastructure.models.staff_assignment import AssignmentTypeEnum
 from app.infrastructure.repositories.staff_assignment_repository import StaffAssignmentRepository
 
 
@@ -55,9 +56,13 @@ class ResourceAuthorizationService:
         Returns:
             True if authorized, False otherwise
         """
+        normalized_type = AssignmentTypeEnum._missing_(resource_type)
+        if normalized_type is None and isinstance(resource_type, str):
+            normalized_type = resource_type.strip().lower()
+
         assignments = await StaffAssignmentRepository.get_by_type(
             tenant_id=tenant_id,
-            assignment_type=resource_type,
+            assignment_type=normalized_type.value if isinstance(normalized_type, AssignmentTypeEnum) else normalized_type,
             is_active=True
         )
         
@@ -88,12 +93,18 @@ class ResourceAuthorizationService:
         Returns:
             List of accessible resource IDs
         """
+        if resource_type is not None:
+            normalized_type = AssignmentTypeEnum._missing_(resource_type)
+            if normalized_type is None and isinstance(resource_type, str):
+                normalized_type = resource_type.strip().lower()
+            resource_type = normalized_type.value if isinstance(normalized_type, AssignmentTypeEnum) else normalized_type
+
         assignments = await StaffAssignmentRepository.get_by_staff_id(tenant_id, staff_id)
         
         resources = []
         for assignment in assignments:
             if assignment.is_active:
-                if resource_type is None or assignment.assignment_type == resource_type:
+                if resource_type is None or assignment.assignment_type == resource_type or str(assignment.assignment_type).lower() == str(resource_type).lower():
                     resources.append(assignment.resource_id)
         
         return resources
@@ -161,10 +172,13 @@ class ResourceAuthorizationService:
         for assignment in assignments:
             if assignment.is_active:
                 if resource_id is None or assignment.resource_id == resource_id:
+                    assignment_type_value = assignment.assignment_type
+                    if isinstance(assignment_type_value, AssignmentTypeEnum):
+                        assignment_type_value = assignment_type_value.value
                     permissions_map[assignment.resource_id] = {
                         "role": assignment.staff_role,
                         "permissions": assignment.permissions,
-                        "resource_type": assignment.assignment_type,
+                        "resource_type": str(assignment_type_value).upper(),
                         "resource_name": assignment.resource_name
                     }
         

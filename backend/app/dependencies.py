@@ -56,6 +56,10 @@ def get_payment_repo() -> PaymentRepository:
 def get_fee_structure_repo() -> FeeStructureRepository:
     return FeeStructureRepository()
 
+# Backward-compatible alias for older finance dashboard imports.
+def get_fee_repo() -> FeeStructureRepository:
+    return FeeStructureRepository()
+
 def get_scholarship_repo() -> ScholarshipRepository:
     return ScholarshipRepository()
 

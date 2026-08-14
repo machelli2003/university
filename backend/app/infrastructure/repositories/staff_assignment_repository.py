@@ -2,9 +2,10 @@
 Staff Assignment Repository
 Handles CRUD operations for staff-to-resource assignments
 """
+import inspect
 from typing import List, Optional
 from beanie import PydanticObjectId
-from app.infrastructure.models.staff_assignment import StaffAssignment
+from app.infrastructure.models.staff_assignment import AssignmentTypeEnum, StaffAssignment
 
 
 class StaffAssignmentRepository:
@@ -44,9 +45,12 @@ class StaffAssignmentRepository:
         is_active: bool = True
     ) -> List[StaffAssignment]:
         """Get assignments by type and status"""
+        normalized_type = AssignmentTypeEnum._missing_(assignment_type)
+        if normalized_type is None:
+            normalized_type = assignment_type.strip().lower() if isinstance(assignment_type, str) else assignment_type
         return await StaffAssignment.find(
             StaffAssignment.tenant_id == tenant_id,
-            StaffAssignment.assignment_type == assignment_type,
+            StaffAssignment.assignment_type == normalized_type,
             StaffAssignment.is_active == is_active
         ).to_list()
 
@@ -80,9 +84,17 @@ class StaffAssignmentRepository:
         limit: int = 50
     ) -> List[StaffAssignment]:
         """List all assignments for a tenant"""
-        return await StaffAssignment.find(
-            StaffAssignment.tenant_id == tenant_id
-        ).skip(skip).limit(limit).to_list()
+        query = StaffAssignment.find(StaffAssignment.tenant_id == tenant_id)
+        skip_query = query.skip(skip)
+        if inspect.isawaitable(skip_query):
+            skip_query = await skip_query
+        limit_query = skip_query.limit(limit)
+        if inspect.isawaitable(limit_query):
+            limit_query = await limit_query
+        to_list = limit_query.to_list()
+        if inspect.isawaitable(to_list):
+            return await to_list
+        return to_list
 
     @staticmethod
     async def check_assignment(

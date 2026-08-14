@@ -20,6 +20,7 @@ from .university_application import UniversityApplication, IdentifierSequence
 from .inventory import Inventory, Asset, MaintenanceSchedule
 from .timetable import Timetable, Venue, TimeSlot
 from .audit import AuditLog
+from .staff_assignment import StaffAssignment
 
 __all__ = [
     "User", "Role", "Permission",
@@ -44,4 +45,5 @@ __all__ = [
     "Inventory", "Asset", "MaintenanceSchedule",
     "Timetable", "Venue", "TimeSlot",
     "AuditLog",
+    "StaffAssignment",
 ]

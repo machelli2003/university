@@ -11,7 +11,7 @@ from app.infrastructure.models import (
     AlumniProfile, Mentorship, Donation, Notification, NotificationTemplate, Campaign,
     Document, DigitalSignature, AuditLog, Workflow, WorkflowInstance, ApprovalTask, Tenant,
     Subscription, UniversityApplication, IdentifierSequence, Permission, Role, Inventory, Asset, MaintenanceSchedule,
-    Timetable, Venue, TimeSlot
+    Timetable, Venue, TimeSlot, StaffAssignment
 )
 
 settings = get_settings()
@@ -34,7 +34,7 @@ async def init_db():
             AlumniProfile, Mentorship, Donation, Notification, NotificationTemplate, Campaign,
             Document, DigitalSignature, AuditLog, Workflow, WorkflowInstance, ApprovalTask, Tenant,
             Subscription, UniversityApplication, IdentifierSequence, Permission, Role, Inventory, Asset, MaintenanceSchedule,
-            Timetable, Venue, TimeSlot
+            Timetable, Venue, TimeSlot, StaffAssignment
         ]
     )
     print("✓ Connected to MongoDB & initialized Beanie models")

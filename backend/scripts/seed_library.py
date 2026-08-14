@@ -47,9 +47,37 @@ async def seed():
         book = LibraryBook(tenant_id=tenant_id, title="Introduction to Programming", isbn="978-0-00-000000-0", author="Jane Doe", publisher="UniPub", category="Computer Science", total_copies=3, available_copies=3)
         await book.insert()
 
+    student_user = await User.find_one({"email": "studentlib@test.com"})
+    if not student_user:
+        student_user = User(
+            tenant_id=tenant_id,
+            email="studentlib@test.com",
+            first_name="Lib",
+            last_name="Student",
+            password_hash=pwd_context.hash("Student123!"),
+            role="student",
+            is_active=True,
+            is_verified=True,
+        )
+        await student_user.insert()
+
     student = await Student.find_one({"email": "studentlib@test.com"})
     if not student:
-        student = Student(tenant_id=tenant_id, email="studentlib@test.com", first_name="Lib", last_name="Student", student_id="STULIB001")
+        student = Student(
+            tenant_id=tenant_id,
+            user_id=str(student_user.id),
+            email="studentlib@test.com",
+            first_name="Lib",
+            last_name="Student",
+            student_id="STULIB001",
+            phone="0241000002",
+            programme_id="prog1",
+            faculty_id="fac1",
+            department_id="dep1",
+            entry_level="100",
+            entry_semester="1",
+            entry_year=2024,
+        )
         await student.insert()
 
     print("Seeded library data: book, librarian, student")

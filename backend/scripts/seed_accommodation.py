@@ -52,9 +52,37 @@ async def seed():
         room = Room(tenant_id=tenant_id, hall_id=str(hall.id), room_number="101", room_type="single", capacity=1, occupied=0, students=[])
         await room.insert()
 
+    student_user = await User.find_one({"email": "student1@test.com"})
+    if not student_user:
+        student_user = User(
+            tenant_id=tenant_id,
+            email="student1@test.com",
+            first_name="Test",
+            last_name="Student",
+            password_hash=pwd_context.hash("Student123!"),
+            role="student",
+            is_active=True,
+            is_verified=True,
+        )
+        await student_user.insert()
+
     student = await Student.find_one({"email": "student1@test.com"})
     if not student:
-        student = Student(tenant_id=tenant_id, email="student1@test.com", first_name="Test", last_name="Student", student_id="STU1001")
+        student = Student(
+            tenant_id=tenant_id,
+            user_id=str(student_user.id),
+            email="student1@test.com",
+            first_name="Test",
+            last_name="Student",
+            student_id="STU1001",
+            phone="0241000001",
+            programme_id="prog1",
+            faculty_id="fac1",
+            department_id="dep1",
+            entry_level="100",
+            entry_semester="1",
+            entry_year=2024,
+        )
         await student.insert()
 
     print("Seeded hostel data: hall, room, admin, student")
