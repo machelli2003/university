@@ -227,7 +227,7 @@ export default function GradeStatisticsPage() {
                           <Cell key={`cell-${entry.grade}`} fill={GRADE_COLORS[entry.grade] || "#6b7280"} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => `${value} students`} />
+                      <Tooltip formatter={(value: any) => `${value} students`} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -247,7 +247,7 @@ export default function GradeStatisticsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="grade" stroke="#6b7280" />
                       <YAxis stroke="#6b7280" />
-                      <Tooltip formatter={(value) => `${value} students`} />
+                      <Tooltip formatter={(value: any) => `${value} students`} />
                       <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]}>
                         {gradeDistributionData.map((entry) => (
                           <Cell key={`cell-${entry.grade}`} fill={GRADE_COLORS[entry.grade] || "#6b7280"} />

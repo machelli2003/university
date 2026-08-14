@@ -23,6 +23,7 @@ from app.infrastructure.models.finance import PaymentStatusEnum
 from app.infrastructure.database.repositories.payment_repository import (
     ScholarshipRepository, FeeStructureRepository
 )
+from app.infrastructure.database.repositories.application_fee_repository import ApplicationFeeRepository
 from app.infrastructure.database.repositories.tenant_repository import TenantRepository
 from app.infrastructure.database.repositories.audit_repository import AuditRepository
 from starlette.responses import StreamingResponse, FileResponse, JSONResponse
@@ -71,6 +72,10 @@ def get_scholarship_repo() -> ScholarshipRepository:
 
 def get_fee_structure_repo() -> FeeStructureRepository:
     return FeeStructureRepository()
+
+
+def get_application_fee_repo() -> ApplicationFeeRepository:
+    return ApplicationFeeRepository()
 
 @router.post("/payments/initiate")
 async def initiate_payment(
@@ -141,6 +146,7 @@ async def paystack_webhook(
     request: Request,
     payment_repo=Depends(get_payment_repo),
     paystack: PaystackService = Depends(get_paystack_service),
+    email_service: EmailService = Depends(get_email_service),
 ):
     """Paystack webhook endpoint for automatic payment confirmation"""
 
@@ -159,7 +165,19 @@ async def paystack_webhook(
 
         if payment:
             use_case = ProcessPaymentUseCase(payment_repo)
-            await use_case.confirm_payment(str(payment.id), reference)
+            result = await use_case.confirm_payment(str(payment.id), reference)
+
+            # attempt to notify payer using email from webhook payload
+            try:
+                customer_email = payload["data"].get("customer", {}).get("email")
+                if customer_email:
+                    await email_service.send_payment_receipt(
+                        to=customer_email,
+                        amount=getattr(payment, "amount", 0.0),
+                        receipt_number=result.get("receipt_number"),
+                    )
+            except Exception:
+                pass
 
     return {"status": "received"}
 
@@ -416,6 +434,68 @@ async def create_fee_structure(
         level=structure.level, academic_year=structure.academic_year,
         fees=structure.fees,
     )
+
+
+@router.post("/application-fee", status_code=status.HTTP_201_CREATED)
+async def create_application_fee(
+    amount: float,
+    currency: str = "GHS",
+    payment_provider: str = "paystack",
+    payment_deadline: str | None = None,
+    refund_policy: str | None = None,
+    fee_category: str = "application",
+    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    app_fee_repo: ApplicationFeeRepository = Depends(get_application_fee_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    data = {
+        "tenant_id": current_user.tenant_id or "default",
+        "amount": amount,
+        "currency": currency,
+        "payment_provider": payment_provider,
+        "payment_deadline": payment_deadline,
+        "refund_policy": refund_policy,
+        "fee_category": fee_category,
+        "is_active": True,
+    }
+    # deactivate existing active fee for tenant
+    existing = await app_fee_repo.get_for_tenant(current_user.tenant_id or "default")
+    if existing:
+        await app_fee_repo.deactivate(str(existing.id))
+
+    fee = await app_fee_repo.create(data)
+
+    await audit_repo.create({
+        "tenant_id": current_user.tenant_id,
+        "event_type": "application_fee_created",
+        "entity_type": "application_fee",
+        "entity_id": str(fee.id),
+        "action": "create_application_fee",
+        "performed_by": str(current_user.id),
+        "details": {"amount": fee.amount, "currency": fee.currency},
+    })
+
+    return {"id": str(fee.id), "amount": fee.amount, "currency": fee.currency, "payment_provider": fee.payment_provider}
+
+
+@router.get("/application-fee")
+async def get_application_fee(
+    current_user: User = Depends(get_current_user),
+    app_fee_repo: ApplicationFeeRepository = Depends(get_application_fee_repo),
+):
+    fee = await app_fee_repo.get_for_tenant(current_user.tenant_id or "default")
+    if not fee:
+        return {"configured": False}
+    return {
+        "configured": True,
+        "id": str(fee.id),
+        "amount": fee.amount,
+        "currency": fee.currency,
+        "payment_provider": fee.payment_provider,
+        "payment_deadline": fee.payment_deadline,
+        "refund_policy": fee.refund_policy,
+        "fee_category": fee.fee_category,
+    }
 
 
 @router.get("/structures/{structure_id}", response_model=FeeStructureResponse)

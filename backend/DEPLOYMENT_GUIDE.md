@@ -136,6 +136,14 @@ AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_S3_BUCKET=eump-prod-bucket
 AWS_REGION=us-east-1
+AWS_S3_ENDPOINT_URL=                 # optional custom endpoint (e.g., for MinIO)
+FILE_STORAGE_PROVIDER=s3            # or 'stub'
+
+# Paystack (payment provider)
+PAYSTACK_PUBLIC_KEY=pk_live_xxx
+PAYSTACK_SECRET_KEY=sk_live_xxx
+PAYSTACK_WEBHOOK_SECRET=whsec_xxx
+PAYSTACK_WEBHOOK_URL=https://api.yourdomain.com/api/v1/finance/payments/webhook
 
 # Sentry (error tracking)
 SENTRY_DSN=your-sentry-dsn
@@ -143,6 +151,27 @@ SENTRY_DSN=your-sentry-dsn
 # Logging
 LOG_LEVEL=INFO
 LOG_FORMAT=json
+
+### Webhook Configuration (Paystack)
+
+- Set the webhook URL to: `https://api.yourdomain.com/api/v1/finance/payments/webhook`
+- Configure the webhook secret in `PAYSTACK_WEBHOOK_SECRET`.
+- Ensure the `PAYSTACK_SECRET_KEY` is set in the server environment and not hard-coded.
+- Verify webhook retry behavior and idempotency; process `charge.success` events and ignore duplicates.
+
+### Storage & Email Provider Notes
+
+- If using AWS S3, ensure the bucket policy allows `PutObject` for the service account and the region is correct.
+- For local testing you may use `FILE_STORAGE_PROVIDER=stub` which will return mock URLs.
+- If using alternative S3-compatible storage (MinIO), set `AWS_S3_ENDPOINT_URL` and ensure `AWS_REGION` and keys are set.
+- For SMTP, prefer a transactional provider (SendGrid, Mailgun) and use app-specific passwords or API keys. `EMAIL_PROVIDER=smtp` will enable SMTP sends; otherwise the service logs messages to server logs.
+
+### Security & Webhook Hardening
+
+- Keep `JWT_SECRET_KEY` secret; rotate periodically.
+- Do not mark payments as successful on the frontend — always verify server-side via Paystack verification endpoint or webhook signature.
+- Verify webhook signatures using `x-paystack-signature` header; the server computes HMAC-SHA512 with `PAYSTACK_SECRET_KEY`.
+- Use HTTPS for all endpoints and disable HTTP in production.
 ```
 
 ### Step 3: Database Setup

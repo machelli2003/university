@@ -7,6 +7,10 @@ from starlette.requests import Request
 from app.config import get_settings
 from app.infrastructure.database.connection import init_db, close_db
 from app.infrastructure.middleware.authorization_middleware import TenantIsolationMiddleware
+from app.infrastructure.middleware.rate_limit import RateLimitMiddleware
+from app.infrastructure.middleware.distributed_rate_limit import (
+    DistributedRateLimitMiddleware, SessionCleanupMiddleware
+)
 from app.exceptions import DomainException, domain_exception_handler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -69,6 +73,9 @@ from app.presentation.api.v1.admissions import routes as admissions_routes
 from app.presentation.api.v1.finance import routes as finance_routes
 from app.presentation.api.v1.exam import routes as exam_routes
 from app.presentation.api.v1.admin import routes as admin_routes
+from app.presentation.api.v1.admin.setup_activation_routes import router as setup_activation_router
+from app.presentation.api.v1.admissions.admissions_workflow_routes import router as admissions_workflow_router
+from app.presentation.api.v1.admissions.officer_dashboards_routes import router as officer_dashboards_router
 from app.presentation.api.v1.onboarding import routes as onboarding_routes
 from app.presentation.api.v1.academic import routes as academic_routes
 from app.presentation.api.v1.accommodation import routes as accommodation_routes
@@ -104,6 +111,9 @@ from app.presentation.api.v1.dashboards import student_dashboard as student_dash
 from app.presentation.api.v1.dashboards import alumni_dashboard as alumni_dashboard
 from app.presentation.api.v1.dashboards import tenant_admin_dashboard as tenant_admin_dashboard
 from app.presentation.api.v1.dashboards import super_admin_dashboard as super_admin_dashboard
+from app.presentation.api.v1.audit import audit_routes as audit_routes
+from app.presentation.api.v1.officer import finance_dashboard as finance_dashboard_routes
+from app.presentation.api.v1.officer import dashboards as officer_dashboards_routes
 
 app = FastAPI(
     title="EUMP API",
@@ -123,6 +133,9 @@ app.add_middleware(
 
 app.add_middleware(AuditMiddleware)
 app.add_middleware(TenantIsolationMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(DistributedRateLimitMiddleware)  # Item 75: Distributed rate limiting
+app.add_middleware(SessionCleanupMiddleware)  # Item 75: Session cleanup
 app.add_exception_handler(DomainException, domain_exception_handler)
 
 @app.on_event("startup")
@@ -139,6 +152,9 @@ app.include_router(admissions_routes.router, prefix="/api/v1/admissions", tags=[
 app.include_router(finance_routes.router, prefix="/api/v1/finance", tags=["finance"])
 app.include_router(exam_routes.router, prefix="/api/v1/exam", tags=["exam"])
 app.include_router(admin_routes.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(setup_activation_router, tags=["Setup & Activation"])
+app.include_router(admissions_workflow_router, tags=["Admissions Workflow"])
+app.include_router(officer_dashboards_router, tags=["Officer Dashboards"])
 app.include_router(academic_routes.router, prefix="/api/v1/academic", tags=["academic"])
 app.include_router(accommodation_routes.router, prefix="/api/v1/accommodation", tags=["accommodation"])
 app.include_router(library_routes.router, prefix="/api/v1/library", tags=["library"])
@@ -173,6 +189,9 @@ app.include_router(student_dashboard.router, prefix="/api/v1", tags=["dashboards
 app.include_router(alumni_dashboard.router, prefix="/api/v1", tags=["dashboards"])
 app.include_router(tenant_admin_dashboard.router, prefix="/api/v1", tags=["dashboards"])
 app.include_router(super_admin_dashboard.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(audit_routes.router, prefix="/api/v1", tags=["audit"])
+app.include_router(finance_dashboard_routes.router, prefix="/api/v1", tags=["dashboards"])
+app.include_router(officer_dashboards_routes.router, prefix="/api/v1", tags=["dashboards"])
 
 @app.get("/health")
 async def health():

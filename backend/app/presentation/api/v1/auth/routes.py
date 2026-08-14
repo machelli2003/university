@@ -6,6 +6,11 @@ from app.presentation.api.v1.auth.schemas import (
 from app.application.auth.login import AuthService
 from app.dependencies import get_current_user, get_auth_service
 from app.infrastructure.models.user import User
+from fastapi import Body
+import pyotp
+from app.infrastructure.database.repositories.token_repository import TokenRepository
+
+_token_repo = TokenRepository()
 
 router = APIRouter()
 
@@ -61,3 +66,79 @@ async def refresh(request: RefreshRequest, auth_service: AuthService = Depends(g
 
     access_token, refresh_token = result
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/token/rotate", response_model=TokenResponse)
+async def rotate_token(
+    request: RefreshRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Item 75: Refresh Token Rotation
+    
+    Rotate refresh token for improved security.
+    - Old refresh token is immediately invalidated
+    - New refresh token is issued
+    - Prevents token replay attacks
+    """
+    from app.infrastructure.security.token_rotation import RefreshTokenRotationService
+    
+    service = RefreshTokenRotationService()
+    
+    try:
+        result = await service.rotate_token(
+            user_id=str(current_user.id),
+            old_refresh_token=request.refresh_token,
+        )
+        
+        return TokenResponse(
+            access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+
+
+@router.post("/revoke", response_model=dict)
+async def revoke_token(token: dict = Body(...)):
+    """Revoke/blacklist a refresh token (logout)."""
+    refresh_token = token.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="refresh_token required")
+
+    await _token_repo.blacklist(refresh_token, reason="user_revoked")
+    return {"status": "success", "message": "Token revoked"}
+
+
+@router.post("/mfa/setup", response_model=dict)
+async def mfa_setup(current_user: User = Depends(get_current_user)):
+    """Generate a TOTP secret and return provisioning URI."""
+    secret = pyotp.random_base32()
+    provisioning_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.email, issuer_name="UniversityPlatform")
+    # store secret in user profile (must be verified to enable)
+    from app.infrastructure.database.repositories.user_repository import UserRepository
+    repo = UserRepository()
+    await repo.update(str(current_user.id), {"mfa_secret": secret})
+    return {"secret": secret, "provisioning_uri": provisioning_uri}
+
+
+@router.post("/mfa/verify", response_model=dict)
+async def mfa_verify(code: dict = Body(...), current_user: User = Depends(get_current_user)):
+    token = code.get("token")
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="token required")
+
+    if not current_user.mfa_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA not setup")
+
+    totp = pyotp.TOTP(current_user.mfa_secret)
+    if totp.verify(token):
+        from app.infrastructure.database.repositories.user_repository import UserRepository
+        repo = UserRepository()
+        await repo.update(str(current_user.id), {"mfa_enabled": True})
+        return {"verified": True}
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")

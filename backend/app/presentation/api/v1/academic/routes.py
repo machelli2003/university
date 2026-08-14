@@ -81,6 +81,10 @@ async def create_programme(
         duration_years=program.duration_years,
         capacity_planned=program.capacity_planned,
         capacity_current=program.capacity_current,
+        description=getattr(program, "description", None),
+        required_subjects=getattr(program, "required_subjects", []),
+        minimum_grades=getattr(program, "minimum_grades", {}),
+        aggregate_threshold=getattr(program, "aggregate_threshold", None),
     )
 
 @router.get("/programmes", response_model=List[ProgramResponse])
@@ -95,6 +99,10 @@ async def list_programmes(
             duration_years=p.duration_years,
             capacity_planned=p.capacity_planned,
             capacity_current=p.capacity_current,
+            description=getattr(p, "description", None),
+            required_subjects=getattr(p, "required_subjects", []),
+            minimum_grades=getattr(p, "minimum_grades", {}),
+            aggregate_threshold=getattr(p, "aggregate_threshold", None),
         )
         for p in programmes
     ]
@@ -113,6 +121,35 @@ async def get_programme(
         duration_years=program.duration_years,
         capacity_planned=program.capacity_planned,
         capacity_current=program.capacity_current,
+        description=getattr(program, "description", None),
+        required_subjects=getattr(program, "required_subjects", []),
+        minimum_grades=getattr(program, "minimum_grades", {}),
+        aggregate_threshold=getattr(program, "aggregate_threshold", None),
+    )
+
+
+@router.put("/programmes/{programme_id}", response_model=ProgramResponse)
+async def update_programme(
+    programme_id: str,
+    request: CreateProgramRequest,
+    current_user: User = Depends(require_roles("university_admin", "super_admin", "registrar", "dean")),
+    program_repo=Depends(get_program_repo),
+):
+    programme = await program_repo.get_by_id(programme_id)
+    if not programme or programme.tenant_id != (current_user.tenant_id or "default"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Programme not found")
+
+    update_data = {k: v for k, v in request.dict().items() if v is not None}
+    updated = await program_repo.update(programme_id, update_data)
+    return ProgramResponse(
+        id=str(updated.id), name=updated.name, code=updated.code,
+        duration_years=updated.duration_years,
+        capacity_planned=updated.capacity_planned,
+        capacity_current=updated.capacity_current,
+        description=getattr(updated, "description", None),
+        required_subjects=getattr(updated, "required_subjects", []),
+        minimum_grades=getattr(updated, "minimum_grades", {}),
+        aggregate_threshold=getattr(updated, "aggregate_threshold", None),
     )
 
 @router.post("/courses", response_model=CourseResponse)

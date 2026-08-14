@@ -258,7 +258,7 @@ export default function RegistrarDashboardPage() {
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value) => `${value} students`}
+                      formatter={(value: any) => `${value} students`}
                       contentStyle={{ backgroundColor: "#fff", border: "1px solid #ccc" }}
                     />
                   </PieChart>
@@ -295,7 +295,7 @@ export default function RegistrarDashboardPage() {
                     <YAxis stroke="#6b7280" />
                     <Tooltip 
                       contentStyle={{ backgroundColor: "#fff", border: "1px solid #ccc" }}
-                      formatter={(value) => `${value} students`}
+                      formatter={(value: any) => `${value} students`}
                     />
                     <Bar dataKey="value" fill="#10b981" radius={[8, 8, 0, 0]} />
                   </BarChart>

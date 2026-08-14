@@ -451,3 +451,369 @@ async def remove_permission_from_staff(
         "permissions": permissions,
         "message": f"Permission '{permission}' removed successfully"
     }
+
+
+# ==================== ITEM 63: IMPERSONATION ====================
+
+@router.post("/users/{target_user_id}/impersonate/start")
+async def start_impersonation(
+    target_user_id: str,
+    reason: str,
+    current_user: User = Depends(require_roles("super_admin")),
+    user_repo: UserRepository = Depends(get_user_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Start impersonating a user (admin support/investigation).
+    
+    Item 63: Impersonation
+    - Only super admins can impersonate
+    - Returns a short-lived impersonation token
+    - All actions during impersonation are audited
+    - Original admin is logged as the actual performer
+    """
+    from app.application.admin.impersonation import ImpersonationUseCase
+    from app.domain.security.token_service import TokenService
+    
+    if current_user.role.value != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can impersonate users"
+        )
+    
+    # Initialize token service (inject properly in production)
+    from app.config import get_settings
+    settings = get_settings()
+    token_service = TokenService(settings.JWT_SECRET_KEY)
+    
+    # Create impersonation use case
+    use_case = ImpersonationUseCase(
+        user_repo=user_repo,
+        audit_repo=audit_repo,
+        token_service=token_service,
+        impersonation_ttl_minutes=30,
+    )
+    
+    try:
+        result = await use_case.start_impersonation(
+            target_user_id=target_user_id,
+            impersonating_admin_id=str(current_user.id),
+            tenant_id=str(current_user.tenant_id),
+            reason=reason,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/impersonation/{impersonation_id}/stop")
+async def stop_impersonation(
+    impersonation_id: str,
+    current_user: User = Depends(require_roles("super_admin")),
+    audit_repo=Depends(get_audit_repo),
+):
+    """End an active impersonation session."""
+    from app.application.admin.impersonation import ImpersonationUseCase
+    from app.domain.security.token_service import TokenService
+    from app.config import get_settings
+    
+    settings = get_settings()
+    token_service = TokenService(settings.JWT_SECRET_KEY)
+    
+    user_repo = await get_user_repo()
+    use_case = ImpersonationUseCase(
+        user_repo=user_repo,
+        audit_repo=audit_repo,
+        token_service=token_service,
+    )
+    
+    try:
+        result = await use_case.end_impersonation(
+            impersonation_id=impersonation_id,
+            impersonating_admin_id=str(current_user.id),
+            tenant_id=str(current_user.tenant_id),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/impersonations/active")
+async def list_active_impersonations(
+    current_user: User = Depends(require_roles("super_admin")),
+    audit_repo=Depends(get_audit_repo),
+):
+    """List active impersonation sessions."""
+    from app.application.admin.impersonation import ImpersonationUseCase
+    from app.domain.security.token_service import TokenService
+    from app.config import get_settings
+    
+    settings = get_settings()
+    token_service = TokenService(settings.JWT_SECRET_KEY)
+    
+    user_repo = await get_user_repo()
+    use_case = ImpersonationUseCase(
+        user_repo=user_repo,
+        audit_repo=audit_repo,
+        token_service=token_service,
+    )
+    
+    result = await use_case.get_active_impersonations(
+        tenant_id=str(current_user.tenant_id),
+    )
+    return result
+
+
+# ==================== ITEM 64: SETUP COMPLETENESS ENGINE ====================
+
+@router.get("/setup/completeness-check")
+async def check_setup_completeness(
+    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    tenant_repo=Depends(get_tenant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Check if university setup is complete.
+    
+    Item 64: Setup Completeness Engine
+    Validates mandatory configurations before university can be activated.
+    Returns completion percentage and list of blocking issues.
+    """
+    from app.application.admin.setup_completeness import SetupCompletenessEngine
+    from app.dependencies import (
+        get_programme_repo, get_faculty_repo, get_course_repo,
+        get_admission_cycle_repo, get_accommodation_repo
+    )
+    
+    # Initialize dependencies
+    programme_repo = await get_programme_repo()
+    faculty_repo = await get_faculty_repo()
+    course_repo = await get_course_repo()
+    admission_repo = await get_admission_cycle_repo()
+    accommodation_repo = await get_accommodation_repo()
+    
+    engine = SetupCompletenessEngine(
+        tenant_repo=tenant_repo,
+        programme_repo=programme_repo,
+        faculty_repo=faculty_repo,
+        course_repo=course_repo,
+        user_repo=await get_user_repo(),
+        admission_repo=admission_repo,
+        accommodation_repo=accommodation_repo,
+    )
+    
+    try:
+        result = await engine.check_setup_completeness(
+            tenant_id=str(current_user.tenant_id),
+        )
+        
+        # Audit the check
+        await audit_repo.create({
+            "tenant_id": str(current_user.tenant_id),
+            "event_type": "setup_completeness_check",
+            "entity_type": "tenant",
+            "entity_id": str(current_user.tenant_id),
+            "action": "check_setup",
+            "performed_by": str(current_user.id),
+            "details": {
+                "completion_percentage": result["completion_percentage"],
+                "is_complete": result["is_complete"],
+            },
+        })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/setup/activate")
+async def activate_university(
+    current_user: User = Depends(require_roles("super_admin")),
+    tenant_repo=Depends(get_tenant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Activate university (only after setup is complete).
+    
+    Must be called by super admin after all setup checks pass.
+    Prevents activation if blocking issues exist.
+    """
+    from app.application.admin.setup_completeness import SetupCompletenessEngine
+    from app.dependencies import (
+        get_programme_repo, get_faculty_repo, get_course_repo,
+        get_admission_cycle_repo, get_accommodation_repo
+    )
+    
+    if current_user.role.value != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can activate universities"
+        )
+    
+    # Check completeness first
+    programme_repo = await get_programme_repo()
+    faculty_repo = await get_faculty_repo()
+    course_repo = await get_course_repo()
+    admission_repo = await get_admission_cycle_repo()
+    accommodation_repo = await get_accommodation_repo()
+    
+    engine = SetupCompletenessEngine(
+        tenant_repo=tenant_repo,
+        programme_repo=programme_repo,
+        faculty_repo=faculty_repo,
+        course_repo=course_repo,
+        user_repo=await get_user_repo(),
+        admission_repo=admission_repo,
+        accommodation_repo=accommodation_repo,
+    )
+    
+    completeness = await engine.check_setup_completeness(
+        tenant_id=str(current_user.tenant_id),
+    )
+    
+    if not completeness["is_complete"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot activate: {', '.join(completeness['blocking_issues'])}",
+        )
+    
+    # Activate the tenant
+    tenant = await tenant_repo.get_by_id(str(current_user.tenant_id))
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found"
+        )
+    
+    # Update activation status
+    tenant.is_active = True
+    tenant.activated_at = datetime.utcnow()
+    await tenant_repo.update(str(tenant.id), tenant)
+    
+    # Audit activation
+    await audit_repo.create({
+        "tenant_id": str(current_user.tenant_id),
+        "event_type": "university_activated",
+        "entity_type": "tenant",
+        "entity_id": str(current_user.tenant_id),
+        "action": "activate_university",
+        "performed_by": str(current_user.id),
+        "details": {
+            "completion_percentage": completeness["completion_percentage"],
+        },
+    })
+    
+    return {
+        "status": "success",
+        "message": "University activated successfully",
+        "tenant_id": str(current_user.tenant_id),
+        "activated_at": datetime.utcnow().isoformat(),
+    }
+
+
+# ==================== ITEM 65: MODULE ENABLEMENT ====================
+
+@router.get("/modules")
+async def list_modules(
+    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    tenant_repo=Depends(get_tenant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    List enabled/disabled modules for the tenant.
+    
+    Item 65: Module Enablement
+    Allows checking which features are available.
+    """
+    from app.application.admin.module_enablement import ModuleEnablementService
+    
+    service = ModuleEnablementService(
+        tenant_repo=tenant_repo,
+        audit_repo=audit_repo,
+    )
+    
+    try:
+        result = await service.get_enabled_modules(
+            tenant_id=str(current_user.tenant_id),
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/modules/{module_name}/enable")
+async def enable_module(
+    module_name: str,
+    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    tenant_repo=Depends(get_tenant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Enable a module for the tenant.
+    
+    Also enables required dependencies automatically.
+    """
+    from app.application.admin.module_enablement import ModuleEnablementService
+    
+    service = ModuleEnablementService(
+        tenant_repo=tenant_repo,
+        audit_repo=audit_repo,
+    )
+    
+    try:
+        result = await service.enable_module(
+            tenant_id=str(current_user.tenant_id),
+            module_name=module_name,
+            admin_id=str(current_user.id),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/modules/{module_name}/disable")
+async def disable_module(
+    module_name: str,
+    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    tenant_repo=Depends(get_tenant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Disable a module for the tenant.
+    
+    Also disables dependent modules automatically.
+    """
+    from app.application.admin.module_enablement import ModuleEnablementService
+    
+    service = ModuleEnablementService(
+        tenant_repo=tenant_repo,
+        audit_repo=audit_repo,
+    )
+    
+    try:
+        result = await service.disable_module(
+            tenant_id=str(current_user.tenant_id),
+            module_name=module_name,
+            admin_id=str(current_user.id),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

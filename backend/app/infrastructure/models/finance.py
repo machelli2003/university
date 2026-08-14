@@ -76,3 +76,19 @@ class Scholarship(Document):
 
     class Settings:
         name = "scholarships"
+
+
+class ApplicationFee(Document):
+    tenant_id: str
+    amount: float
+    currency: str = "GHS"
+    payment_provider: str = "paystack"
+    payment_deadline: Optional[datetime] = None
+    refund_policy: Optional[str] = None
+    fee_category: str = "application"
+    is_active: bool = True
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "application_fees"

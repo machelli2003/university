@@ -52,6 +52,10 @@ class ProgramResponse(BaseModel):
     duration_years: int
     capacity_planned: int
     capacity_current: int
+    description: Optional[str] = None
+    required_subjects: List[str] = []
+    minimum_grades: dict = {}
+    aggregate_threshold: Optional[int] = None
 
 
 class CreateAcademicCalendarRequest(BaseModel):

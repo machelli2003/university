@@ -499,6 +499,105 @@ async def create_student_record(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+
+# ==================== ITEM 61: ACCEPT OFFER & ENROLL ====================
+
+@router.post("/{applicant_id}/offer/accept")
+async def accept_offer(
+    applicant_id: str,
+    current_user: User = Depends(get_current_user),
+    applicant_repo=Depends(get_applicant_repo),
+    student_repo=Depends(get_student_repo),
+    user_repo=Depends(get_user_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Accept admission offer and convert applicant to student.
+    Creates student record with generated student ID.
+    Applicant can accept their own offer; officers can also process this.
+    
+    Item 61: Student Lifecycle
+    """
+    applicant = await applicant_repo.get_by_id(applicant_id)
+    if not applicant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Applicant not found")
+    
+    # Check access: applicant or admissions officer
+    if str(applicant.user_id) != str(current_user.id):
+        if current_user.role.value not in OFFICER_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    from app.application.admissions.accept_offer import AcceptOfferUseCase
+    from app.domain.identifiers.identifier_service import IdentifierService
+    
+    identifier_service = IdentifierService(applicant_repo)  # Simplified; inject properly
+    use_case = AcceptOfferUseCase(
+        applicant_repo=applicant_repo,
+        student_repo=student_repo,
+        user_repo=user_repo,
+        identifier_service=identifier_service,
+        audit_repo=audit_repo,
+    )
+    
+    try:
+        result = await use_case.accept_offer(
+            applicant_id=applicant_id,
+            tenant_id=str(current_user.tenant_id),
+            user_id=str(current_user.id),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{applicant_id}/offer/reject")
+async def reject_offer(
+    applicant_id: str,
+    request: RejectOfferRequest = None,
+    current_user: User = Depends(get_current_user),
+    applicant_repo=Depends(get_applicant_repo),
+    user_repo=Depends(get_user_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """Reject admission offer."""
+    applicant = await applicant_repo.get_by_id(applicant_id)
+    if not applicant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Applicant not found")
+    
+    # Check access
+    if str(applicant.user_id) != str(current_user.id):
+        if current_user.role.value not in OFFICER_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    from app.application.admissions.accept_offer import AcceptOfferUseCase
+    from app.domain.identifiers.identifier_service import IdentifierService
+    
+    identifier_service = IdentifierService(applicant_repo)
+    use_case = AcceptOfferUseCase(
+        applicant_repo=applicant_repo,
+        student_repo=None,
+        user_repo=user_repo,
+        identifier_service=identifier_service,
+        audit_repo=audit_repo,
+    )
+    
+    try:
+        result = await use_case.reject_offer(
+            applicant_id=applicant_id,
+            tenant_id=str(current_user.tenant_id),
+            user_id=str(current_user.id),
+            rejection_reason=request.reason if request else None,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.get("/{applicant_id}", response_model=ApplicantResponse)
 async def get_applicant(
     applicant_id: str,

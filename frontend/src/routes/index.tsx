@@ -11,6 +11,7 @@ import ApplicantPortalLandingPage from "@/pages/applicant/ApplicantPortalLanding
 import ApplicantPortalLoginPage from "@/pages/applicant/ApplicantPortalLoginPage"
 import ApplicantPortalRegistrationPage from "@/pages/applicant/ApplicantPortalRegistrationPage"
 import ApplicantPortalDashboardPage from "@/pages/applicant/ApplicantPortalDashboardPage"
+import ApplicantPortalPaymentPage from "@/pages/applicant/ApplicantPortalPaymentPage"
 import ApplicantWASSCEEntryPage from "@/pages/applicant/ApplicantWASSCEEntryPage"
 
 import ApplicationStatusPage from "@/pages/applicant/ApplicationStatusPage"
@@ -105,6 +106,7 @@ export function AppRoutes() {
       <Route path="/apply/:schoolCode/login" element={<ApplicantPortalLoginPage />} />
       <Route path="/apply/:schoolCode/register" element={<ApplicantPortalRegistrationPage />} />
       <Route path="/apply/:schoolCode/dashboard" element={<ApplicantPortalDashboardPage />} />
+      <Route path="/apply/:schoolCode/payment" element={<ApplicantPortalPaymentPage />} />
       <Route path="/apply/:schoolCode/wassce" element={<ApplicantWASSCEEntryPage />} />
       {/* Additional applicant portal pages will be added in next sections */}
 

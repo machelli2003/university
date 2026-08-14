@@ -131,9 +131,16 @@ class Applicant(Document):
     merit_score: Optional[float] = None
     merit_rank: Optional[int] = None
 
+    # Offer Management (Item 61: Student Lifecycle)
+    offer_id: Optional[str] = None
     offer_letter_id: Optional[str] = None
     offer_accepted: bool = False
     offer_accepted_at: Optional[datetime] = None
+    offer_acceptance_date: Optional[datetime] = None
+    offer_rejected: bool = False
+    offer_rejected_at: Optional[datetime] = None
+    offer_rejection_date: Optional[datetime] = None
+    offer_rejection_reason: Optional[str] = None
 
     student_id: Optional[str] = None
 

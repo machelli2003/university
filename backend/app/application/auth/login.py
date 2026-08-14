@@ -5,6 +5,9 @@ from jose import JWTError, jwt
 from app.infrastructure.database.repositories.user_repository import UserRepository
 from app.infrastructure.models.user import User
 from app.config import get_settings
+from app.infrastructure.database.repositories.token_repository import TokenRepository
+
+_token_repo = TokenRepository()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
@@ -85,6 +88,10 @@ class AuthService:
         return await self.user_repo.create(user_data)
 
     async def refresh_access_token(self, refresh_token: str) -> Optional[Tuple[str, str]]:
+        # check blacklist first
+        if await _token_repo.is_blacklisted(refresh_token):
+            return None
+
         payload = self.decode_token(refresh_token)
         if not payload or payload.get("type") != "refresh":
             return None

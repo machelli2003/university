@@ -71,6 +71,11 @@ def get_registration_repo() -> RegistrationRepository:
 def get_academic_calendar_repo() -> AcademicCalendarRepository:
     return AcademicCalendarRepository()
 
+
+def get_application_fee_repo() -> "ApplicationFeeRepository":
+    from app.infrastructure.database.repositories.application_fee_repository import ApplicationFeeRepository
+    return ApplicationFeeRepository()
+
 def get_attendance_repo() -> AttendanceRepository:
     return AttendanceRepository()
 

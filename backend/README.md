@@ -2694,3 +2694,12 @@ LOW PRIORITY (Items 27, 33, 42-45, 49-50, 76)
 Research, counseling systems
 Multi-language/currency
 Non-critical features
+
+
+❌ Items 19-31: Admissions Pipeline (form builder → eligibility → ranking → offers) — THE CRITICAL BLOCKING PIECE
+❌ Items 32-33: University activation & portal routing
+❌ Items 35-45: WASSCE workflow, application states, all officer frontends (lecturer, registrar, HOD, dean, exam, admissions, etc.)
+❌ Items 49-50: Student & Alumni portals
+❌ Items 53-60: Dashboard isolation, authorization model, staff assignment, resource scoping
+❌ Items 66-70: Frontend design system, component library, database schema documentation
+❌ Item 76: End-to-end testing — validates entire system works
