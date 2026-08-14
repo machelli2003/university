@@ -8,8 +8,14 @@ This script reads DB settings from `app.config` and will not write
 secrets into the repository. Use carefully.
 """
 
-import asyncio
+import os
 import sys
+from typing import Optional
+
+# Ensure backend directory is on Python path regardless of execution location
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from passlib.context import CryptContext
@@ -21,9 +27,12 @@ from app.infrastructure.models.tenant import Tenant
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-async def create_admin(email: str, password: str, role: str = "university_admin") -> None:
+async def create_admin(email: str, password: str, role: str = "university_admin", client: Optional[AsyncIOMotorClient] = None) -> None:
     settings = get_settings()
-    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    should_close = False
+    if client is None:
+        client = AsyncIOMotorClient(settings.MONGODB_URL)
+        should_close = True
     db = client[settings.MONGODB_DB]
 
     await init_beanie(database=db, document_models=[User, Tenant])
@@ -70,30 +79,38 @@ async def create_admin(email: str, password: str, role: str = "university_admin"
         await user.save()
         print(f"Updated existing user and set as {role}: {email}")
 
-    client.close()
+    if should_close:
+        client.close()
+
+
+async def run_main():
+    settings = get_settings()
+    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    try:
+        if len(sys.argv) == 1:
+            created = False
+            if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
+                await create_admin(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD, "university_admin", client=client)
+                created = True
+            if settings.SUPER_ADMIN_EMAIL and settings.SUPER_ADMIN_PASSWORD:
+                await create_admin(settings.SUPER_ADMIN_EMAIL, settings.SUPER_ADMIN_PASSWORD, "super_admin", client=client)
+                created = True
+            if not created:
+                print("Usage: python -m scripts.create_admin email@example.com StrongPassword [role]")
+                print("Or set ADMIN_EMAIL/ADMIN_PASSWORD and/or SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in .env")
+                sys.exit(1)
+        else:
+            if len(sys.argv) not in (3, 4):
+                print("Usage: python -m scripts.create_admin email@example.com StrongPassword [role]")
+                sys.exit(1)
+
+            email = sys.argv[1]
+            password = sys.argv[2]
+            role = sys.argv[3] if len(sys.argv) == 4 else "university_admin"
+            await create_admin(email, password, role, client=client)
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":
-    settings = get_settings()
-
-    if len(sys.argv) == 1:
-        created = False
-        if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
-            asyncio.run(create_admin(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD, "university_admin"))
-            created = True
-        if settings.SUPER_ADMIN_EMAIL and settings.SUPER_ADMIN_PASSWORD:
-            asyncio.run(create_admin(settings.SUPER_ADMIN_EMAIL, settings.SUPER_ADMIN_PASSWORD, "super_admin"))
-            created = True
-        if not created:
-            print("Usage: python -m scripts.create_admin email@example.com StrongPassword [role]")
-            print("Or set ADMIN_EMAIL/ADMIN_PASSWORD and/or SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in .env")
-            sys.exit(1)
-    else:
-        if len(sys.argv) not in (3, 4):
-            print("Usage: python -m scripts.create_admin email@example.com StrongPassword [role]")
-            sys.exit(1)
-
-        email = sys.argv[1]
-        password = sys.argv[2]
-        role = sys.argv[3] if len(sys.argv) == 4 else "university_admin"
-        asyncio.run(create_admin(email, password, role))
+    asyncio.run(run_main())

@@ -3,11 +3,20 @@ import { AppShell } from "@/components/layout/AppShell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
+import SuperAdminDashboardPage from "@/pages/officer/SuperAdminDashboardPage"
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
 
-  const isOfficer = user && ["admissions_officer", "registrar", "university_admin", "super_admin"].includes(user.role)
+  if (user?.role === "super_admin") {
+    return (
+      <AppShell>
+        <SuperAdminDashboardPage />
+      </AppShell>
+    )
+  }
+
+  const isOfficer = user && ["admissions_officer", "registrar", "university_admin"].includes(user.role)
 
   return (
     <AppShell>

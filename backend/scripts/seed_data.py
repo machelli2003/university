@@ -5,6 +5,12 @@ and a sample programme so you can test the full admissions flow.
 Run: python -m scripts.seed_data
 """
 
+import os
+import sys
+
+# Ensure backend directory is on Python path regardless of execution location
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie

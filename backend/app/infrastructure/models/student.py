@@ -15,6 +15,9 @@ class StudentStatusEnum(str, Enum):
     GRADUATED = "graduated"
     ALUMNI = "alumni"
 
+from pymongo import IndexModel, ASCENDING
+
+
 class Student(Document):
     tenant_id: str
     user_id: str
@@ -69,7 +72,7 @@ class Student(Document):
     class Settings:
         name = "students"
         indexes = [
-            [("tenant_id", 1), ("user_id", 1)],
-            [("tenant_id", 1), ("student_id", 1)],
-            [("status", 1)],
+            IndexModel([("tenant_id", ASCENDING), ("user_id", ASCENDING)], name="idx_students_tenant_user"),
+            IndexModel([("tenant_id", ASCENDING), ("student_id", ASCENDING)], name="idx_students_tenant_student_id"),
+            IndexModel([("status", ASCENDING)], name="idx_students_status"),
         ]

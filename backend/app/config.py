@@ -1,5 +1,8 @@
+import os
 from pydantic_settings import BaseSettings
 from typing import List, Optional
+
+ENV_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 
 class Settings(BaseSettings):
     # MongoDB
@@ -69,7 +72,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     class Config:
-        env_file = ".env"
+        env_file = ENV_FILE_PATH
 
     def production_checks(self) -> None:
         if self.ENVIRONMENT == "production":

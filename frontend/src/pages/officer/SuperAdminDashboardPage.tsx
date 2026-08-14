@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { useAuthStore } from "@/store/authStore"
-import axios from "axios"
+import { apiClient } from "@/services/api/client"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 
@@ -23,34 +23,36 @@ interface SuperAdminDashboardData {
 
 export default function SuperAdminDashboardPage() {
   const { user } = useAuthStore()
+  const accessToken = useAuthStore((s) => s.accessToken)
   const [data, setData] = useState<SuperAdminDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedTab, setSelectedTab] = useState<"overview" | "tenants" | "metrics" | "settings">("overview")
 
   useEffect(() => {
+    if (!accessToken) {
+      // Store not yet hydrated — wait
+      return
+    }
     const fetchDashboard = async () => {
       try {
-        const token = localStorage.getItem("access_token")
-        if (!token) return
-
-        const response = await axios.get(`/api/v1/officer/dashboard/super_admin`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
+        const response = await apiClient.get<SuperAdminDashboardData>("/officer/dashboard/super_admin")
         setData(response.data)
-      } catch (error) {
-        console.error("Failed to load SuperAdmin dashboard:", error)
+      } catch (err: any) {
+        const msg = err?.response?.data?.detail || err?.message || "Unknown error"
+        console.error("Failed to load SuperAdmin dashboard:", err)
+        setError(msg)
       } finally {
         setLoading(false)
       }
     }
 
     fetchDashboard()
-  }, [])
+  }, [accessToken])
 
-  if (loading) {
+  if (loading || !accessToken) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[300px]">
         <div className="text-lg text-gray-600">Loading dashboard...</div>
       </div>
     )
@@ -58,15 +60,15 @@ export default function SuperAdminDashboardPage() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
         <div className="text-lg text-red-600">Failed to load dashboard data</div>
+        {error && <div className="text-sm text-gray-500 bg-red-50 border border-red-200 rounded px-4 py-2 max-w-lg text-center">{error}</div>}
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
@@ -348,6 +350,5 @@ export default function SuperAdminDashboardPage() {
           </div>
         </div>
       </div>
-    </div>
   )
 }

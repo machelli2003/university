@@ -120,7 +120,12 @@ class IndexManager:
             {
                 "name": "idx_audit_tenant_timestamp",
                 "keys": [("tenant_id", 1), ("timestamp", -1)],
-                "description": "For audit trail queries",
+                "description": "For audit trail queries"
+            },
+            {
+                "name": "idx_audit_timestamp_ttl",
+                "keys": [("timestamp", -1)],
+                "description": "TTL index for audit log retention",
                 "ttl": 7776000  # 90 days
             }
         ]

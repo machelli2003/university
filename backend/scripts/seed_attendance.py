@@ -1,4 +1,10 @@
 """Seed script: create tenant, lecturer, student, course, fee structure, scholarship, payment for manual testing"""
+import os
+import sys
+
+# Ensure backend directory is on Python path regardless of execution location
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import asyncio
 from app.infrastructure.database.connection import init_db, close_db
 from app.infrastructure.database.repositories.user_repository import UserRepository

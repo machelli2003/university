@@ -91,6 +91,9 @@ class VerificationStatusEnum(str, Enum):
     REJECTED = "rejected"
     REQUIRES_CORRECTION = "requires_correction"
 
+from pymongo import IndexModel, ASCENDING
+
+
 class Applicant(Document):
     tenant_id: str
     user_id: str
@@ -152,11 +155,11 @@ class Applicant(Document):
     class Settings:
         name = "applicants"
         indexes = [
-            [("tenant_id", 1), ("user_id", 1)],
-            [("tenant_id", 1), ("status", 1)],
-            [("tenant_id", 1), ("index_number", 1)],
-            [("verification_status", 1)],
-            [("merit_rank", 1)],
+            IndexModel([("tenant_id", ASCENDING), ("user_id", ASCENDING)], name="idx_applicants_tenant_user"),
+            IndexModel([("tenant_id", ASCENDING), ("status", ASCENDING)], name="idx_applicants_tenant_status"),
+            IndexModel([("tenant_id", ASCENDING), ("index_number", ASCENDING)], name="idx_applicants_tenant_index_number"),
+            IndexModel([("verification_status", ASCENDING)], name="idx_applicants_verification_status"),
+            IndexModel([("merit_rank", ASCENDING)], name="idx_applicants_merit_rank"),
         ]
 
 class ApplicantResult(Document):

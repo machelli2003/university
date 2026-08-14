@@ -4,8 +4,13 @@ Usage:
     python scripts/reconcile_payments.py [tenant_id]
 
 """
-import asyncio
+import os
 import sys
+
+# Ensure backend directory is on Python path regardless of execution location
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import asyncio
 from app.application.finance.reconciliation import reconcile_pending_payments
 
 

@@ -4,6 +4,12 @@ Seed script for library data: create a librarian, a sample book and a sample stu
 Run: python -m scripts.seed_library
 """
 
+import os
+import sys
+
+# Ensure backend directory is on Python path regardless of execution location
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie

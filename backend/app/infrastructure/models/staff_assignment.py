@@ -46,6 +46,9 @@ class AssignmentTypeEnum(str, Enum):
         return self.value
 
 
+from pymongo import IndexModel, ASCENDING
+
+
 class StaffAssignment(Document):
     """
     Represents assignment of a staff member to a resource.
@@ -98,10 +101,10 @@ class StaffAssignment(Document):
     class Settings:
         name = "staff_assignments"
         indexes = [
-            [("tenant_id", 1), ("staff_id", 1)],  # Find all assignments for a staff
-            [("tenant_id", 1), ("resource_id", 1)],  # Find all staff for a resource
-            [("tenant_id", 1), ("assignment_type", 1), ("is_active", 1)],  # Active assignments by type
-            [("tenant_id", 1), ("staff_id", 1), ("is_active", 1)],  # Active assignments for staff
+            IndexModel([("tenant_id", ASCENDING), ("staff_id", ASCENDING)], name="idx_assignments_tenant_staff"),
+            IndexModel([("tenant_id", ASCENDING), ("resource_id", ASCENDING)], name="idx_assignments_tenant_resource"),
+            IndexModel([("tenant_id", ASCENDING), ("assignment_type", ASCENDING), ("is_active", ASCENDING)], name="idx_assignments_tenant_assignment_type_active"),
+            IndexModel([("tenant_id", ASCENDING), ("staff_id", ASCENDING), ("is_active", ASCENDING)], name="idx_assignments_tenant_staff_active"),
         ]
 
 

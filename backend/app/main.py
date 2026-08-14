@@ -20,9 +20,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
-        # read body for logging (safe for downstream in Starlette/FastAPI)
+        # Safely read body and reset receive stream so downstream handlers receive body
         try:
             body_bytes = await request.body()
+            async def receive():
+                return {"type": "http.request", "body": body_bytes}
+            request._receive = receive
         except Exception:
             body_bytes = b""
 
@@ -34,37 +37,40 @@ class AuditMiddleware(BaseHTTPMiddleware):
             f"{request_id} {request.method} {request.url.path} from {client_host or 'unknown'}"
         )
 
-        # Persist an audit record (best-effort, do not block response on failure)
-        try:
-            from app.infrastructure.database.repositories.audit_repository import AuditRepository
-            import json
+        # Persist audit record asynchronously without blocking HTTP response
+        async def _save_audit():
+            try:
+                from app.infrastructure.database.repositories.audit_repository import AuditRepository
+                import json
 
-            repo = AuditRepository()
-            details = {
-                "method": request.method,
-                "path": request.url.path,
-                "query": dict(request.query_params),
-            }
-            if body_bytes:
-                try:
-                    details["body"] = json.loads(body_bytes.decode("utf-8"))
-                except Exception:
-                    details["body"] = body_bytes.decode("utf-8", errors="replace")[:2000]
+                repo = AuditRepository()
+                details = {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query": dict(request.query_params),
+                }
+                if body_bytes:
+                    try:
+                        details["body"] = json.loads(body_bytes.decode("utf-8"))
+                    except Exception:
+                        details["body"] = body_bytes.decode("utf-8", errors="replace")[:2000]
 
-            # write minimal audit entry; performed_by/tenant may be unset here
-            await repo.create({
-                "tenant_id": getattr(request.state, "tenant_id", None),
-                "event_type": "http_request",
-                "entity_type": "request",
-                "entity_id": request_id,
-                "action": f"{request.method} {request.url.path}",
-                "performed_by": getattr(request.state, "user_id", None),
-                "details": details,
-                "ip_address": client_host,
-                "request_id": request_id,
-            })
-        except Exception:
-            logging.getLogger("audit").exception("Failed to persist audit log")
+                await repo.create({
+                    "tenant_id": getattr(request.state, "tenant_id", None),
+                    "event_type": "http_request",
+                    "entity_type": "request",
+                    "entity_id": request_id,
+                    "action": f"{request.method} {request.url.path}",
+                    "performed_by": getattr(request.state, "user_id", None),
+                    "details": details,
+                    "ip_address": client_host,
+                    "request_id": request_id,
+                })
+            except Exception:
+                logging.getLogger("audit").exception("Failed to persist audit log")
+
+        import asyncio
+        asyncio.create_task(_save_audit())
 
         return response
 
