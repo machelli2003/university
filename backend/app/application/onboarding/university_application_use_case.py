@@ -6,6 +6,10 @@ from app.application.identifiers.identifier_service import IdentifierService
 from app.infrastructure.models.university_application import UniversityApplicationStatusEnum
 from app.infrastructure.models.tenant import SubscriptionTierEnum
 from app.domain.onboarding.setup_completeness_service import SetupCompletenessService
+from app.application.notifications.setup_review_notifications import (
+    notify_super_admins_for_application,
+    notify_application_admin,
+)
 
 
 class UniversityApplicationUseCase:
@@ -160,12 +164,28 @@ class UniversityApplicationUseCase:
         ]:
             raise ValueError("Application has already been submitted or processed")
 
-        return await self.application_repo.update(application.id, {
+        updated = await self.application_repo.update(application.id, {
             "status": UniversityApplicationStatusEnum.AWAITING_SUPER_ADMIN_APPROVAL,
             "submitted_at": datetime.utcnow(),
             "review_requested_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         })
+        
+        # Notify super admins that application is ready for review
+        try:
+            uni_name = application.university_information.legal_name if application.university_information else "University"
+            await notify_super_admins_for_application(
+                tenant_id=None,
+                title=f"New Application Review: {uni_name}",
+                message=f"University setup application from {application.admin_email} is ready for review.",
+                target_url="/admin/super-admin-review",
+            )
+        except Exception as e:
+            # Log error but don't fail the submission
+            import logging
+            logging.getLogger(__name__).error(f"Failed to notify super admins: {e}")
+        
+        return updated
 
     async def approve_application(self, application_id: str, reviewer_id: str):
         application = await self.application_repo.get_by_application_id(application_id)
@@ -174,43 +194,32 @@ class UniversityApplicationUseCase:
         if application.status != UniversityApplicationStatusEnum.AWAITING_SUPER_ADMIN_APPROVAL:
             raise ValueError("Application is not awaiting approval")
 
-        tenant_data = {
-            "name": application.legal_name,
-            "description": application.description,
-            "subdomain": application.school_code.lower(),
-            "school_code": application.school_code.upper(),
-            "admin_email": application.official_email or application.admin_email,
-            "admin_phone": application.official_phone,
-            "country": application.country or "Ghana",
-            "timezone": application.timezone or "Africa/Accra",
-            "is_active": False,
-            "is_trial": True,
-            "subscription_tier": SubscriptionTierEnum.STARTER,
-            "features": {
-                "admissions": True,
-                "finance": True,
-                "academic": True,
-                "exam": True,
-                "accommodation": True,
-                "library": True,
-                "hr": True,
-                "health": True,
-                "research": True,
-                "alumni": True,
-            },
-        }
+        uni_info = application.university_information
+        if not uni_info:
+            raise ValueError("University information not configured")
 
-        existing = await self.tenant_repo.get_by_subdomain(tenant_data["subdomain"])
-        if existing:
-            raise ValueError("Tenant with this subdomain already exists")
-
-        tenant = await self.tenant_repo.create(tenant_data)
+        # Single-university mode: do not create a distinct tenant record. The app operates
+        # as one university deployment, so the tenant context is flattened to a single constant.
         updated_application = await self.application_repo.update(application.id, {
             "status": UniversityApplicationStatusEnum.PROVISIONING,
             "approved_at": datetime.utcnow(),
-            "tenant_id": str(tenant.id),
+            "tenant_id": "single-university",
             "updated_at": datetime.utcnow(),
         })
+        
+        # Notify admin that application has been approved
+        try:
+            await notify_application_admin(
+                admin_email=application.admin_email,
+                title="Application Approved ✓",
+                message=f"Your university setup application has been approved! Proceed to activate your university.",
+                target_url="/admin/university-applications",
+                tenant_id=application.tenant_id or "default",
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to notify admin of approval: {e}")
+        
         return updated_application
 
     async def activate_application(self, application_id: str):
@@ -219,17 +228,12 @@ class UniversityApplicationUseCase:
             raise ValueError("University application not found")
         if application.status != UniversityApplicationStatusEnum.PROVISIONING:
             raise ValueError("Application is not in provisioning stage")
-        if not application.tenant_id:
-            raise ValueError("No tenant allocated to application")
 
-        tenant = await self.tenant_repo.get_by_id(application.tenant_id)
-        if not tenant:
-            raise ValueError("Tenant not found")
-
-        await self.tenant_repo.update(str(tenant.id), {"is_active": True})
+        # Single-university mode: activation happens without creating or validating a separate tenant.
         return await self.application_repo.update(application.id, {
             "status": UniversityApplicationStatusEnum.ACTIVE,
             "activated_at": datetime.utcnow(),
+            "tenant_id": "single-university",
             "updated_at": datetime.utcnow(),
         })
 
@@ -244,13 +248,28 @@ class UniversityApplicationUseCase:
         ]:
             raise ValueError("Application cannot be rejected in its current state")
 
-        return await self.application_repo.update(application.id, {
+        updated = await self.application_repo.update(application.id, {
             "status": UniversityApplicationStatusEnum.REJECTED,
             "review_notes": reason,
             "rejection_reason": reason,
             "rejected_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         })
+        
+        # Notify admin that application has been rejected
+        try:
+            await notify_application_admin(
+                admin_email=application.admin_email,
+                title="Application Rejected",
+                message=f"Your university setup application was rejected. Reason: {reason}",
+                target_url="/admin/university-applications",
+                tenant_id=application.tenant_id,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to notify admin of rejection: {e}")
+        
+        return updated
 
     def get_setup_completeness_summary(self, application) -> Dict[str, Any]:
         """Get a detailed summary of setup completeness."""
@@ -268,8 +287,23 @@ class UniversityApplicationUseCase:
         if application.status != UniversityApplicationStatusEnum.AWAITING_SUPER_ADMIN_APPROVAL:
             raise ValueError("Application is not awaiting super admin approval")
 
-        return await self.application_repo.update(application.id, {
+        updated = await self.application_repo.update(application.id, {
             "status": UniversityApplicationStatusEnum.PENDING_SETUP,
             "review_notes": reason,
             "updated_at": datetime.utcnow(),
         })
+        
+        # Notify admin that changes have been requested
+        try:
+            await notify_application_admin(
+                admin_email=application.admin_email,
+                title="Changes Requested",
+                message=f"Super admin requested changes to your setup: {reason}",
+                target_url="/admin/university-applications",
+                tenant_id=application.tenant_id,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to notify admin of change request: {e}")
+        
+        return updated

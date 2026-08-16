@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from app.presentation.api.v1.onboarding.routes import (
     create_university_application,
+    get_university_application,
     update_university_application,
     submit_university_application_for_review,
     approve_university_application,
@@ -10,12 +11,14 @@ from app.presentation.api.v1.onboarding.routes import (
     reject_university_application,
     update_application_setup_section,
 )
+from app.application.onboarding.university_application_use_case import UniversityApplicationUseCase
 from app.presentation.api.v1.onboarding.schemas import (
     CreateUniversityApplicationRequest,
     UpdateUniversityApplicationRequest,
     UpdateSetupSectionRequest,
     RejectUniversityApplicationRequest,
 )
+from app.infrastructure.database.repositories.university_application_repository import IdentifierSequenceRepository
 
 class MockUser:
     def __init__(self, tenant_id=None, id_="u1", role="super_admin"):
@@ -77,6 +80,9 @@ class MockUniversityApplicationRepo:
     async def get_by_application_id(self, application_id):
         return self.applications.get(application_id)
 
+    async def get_by_id(self, application_id):
+        return self.applications.get(application_id)
+
     async def get_all(self):
         # Return unique application objects when both keys exist
         unique_apps = {id(app): app for app in self.applications.values()}
@@ -128,6 +134,97 @@ class MockAuditRepo:
     async def create(self, data):
         return None
 
+def test_create_request_allows_blank_optional_email_fields():
+    request = CreateUniversityApplicationRequest(
+        legal_name="Test University",
+        display_name="Test Uni",
+        school_code="TST",
+        admin_first_name="Jane",
+        admin_last_name="Doe",
+        admin_email="jane.doe@example.com",
+        official_email="",
+        website="",
+    )
+
+    assert request.official_email is None
+    assert request.website is None
+
+
+@pytest.mark.asyncio
+async def test_submit_for_review_sends_super_admin_notification(monkeypatch):
+    user = MockUser(role="super_admin")
+    app_repo = MockUniversityApplicationRepo()
+    app = MockApplication(
+        id="app-1",
+        university_application_id="UAPP-2026-000002",
+        requested_by="u1",
+        status="draft",
+        setup_sections={
+            "university_information": True,
+            "id_configuration": True,
+            "academic_years": True,
+            "faculties": True,
+            "departments": True,
+            "programmes": True,
+            "courses": True,
+            "admission_cycle": True,
+            "admission_requirements": True,
+            "application_form": True,
+            "application_fee": True,
+            "staff": True,
+            "student_id_configuration": True,
+            "staff_id_configuration": True,
+            "applicant_id_configuration": True,
+            "grading": True,
+            "graduation": True,
+            "finance": True,
+            "module_enablement": True,
+            "admission_categories": False,
+            "role_permission": False,
+            "hostel": False,
+            "library": False,
+        },
+    )
+    app_repo.applications[app.university_application_id] = app
+    app_repo.applications[app.id] = app
+    tenant_repo = MockTenantRepo()
+    identifier_service = MockIdentifierService()
+    notifications = []
+
+    async def fake_notify(**kwargs):
+        notifications.append(kwargs)
+
+    monkeypatch.setattr(
+        "app.application.onboarding.university_application_use_case.notify_super_admins_for_application",
+        fake_notify,
+    )
+
+    use_case = UniversityApplicationUseCase(app_repo, tenant_repo, identifier_service)
+    await use_case.submit_for_review(app.university_application_id)
+
+    assert notifications
+    assert notifications[0]["target_url"] == "/admin/super-admin-review"
+
+
+@pytest.mark.asyncio
+async def test_identifier_sequence_upsert_avoids_conflicting_updated_at_fields():
+    class GuardedCollection:
+        async def find_one_and_update(self, filter_query, update, upsert=True, return_document=None):
+            if "$setOnInsert" in update and "$set" in update:
+                set_on_insert = update["$setOnInsert"]
+                set_update = update["$set"]
+                if "updated_at" in set_on_insert and "updated_at" in set_update:
+                    raise AssertionError("Conflicting updated_at updates in the same Mongo operation")
+            return {"sequence": 1}
+
+    repo = IdentifierSequenceRepository()
+    repo.model.get_motor_collection = lambda: GuardedCollection()
+
+    sequence = await repo.next_sequence(None, "university_application", 2026)
+
+    assert sequence == 1
+
+
 @pytest.mark.asyncio
 async def test_create_submit_approve_activate_workflow():
     user = MockUser(role="super_admin")
@@ -160,6 +257,58 @@ async def test_create_submit_approve_activate_workflow():
     application_id = application.university_application_id
 
     section_request = UpdateSetupSectionRequest(completed=True)
+
+
+@pytest.mark.asyncio
+async def test_get_university_application_allows_university_admin_same_tenant():
+    current_user = MockUser(id_="admin-1", role="university_admin", tenant_id="tenant-123")
+    app_repo = MockUniversityApplicationRepo()
+    app = MockApplication(
+        id="app-1",
+        university_application_id="UAPP-2026-000002",
+        tenant_id="tenant-123",
+        requested_by="other-admin",
+        legal_name="Tenant University",
+        school_code="TNT",
+        status="draft",
+        setup_sections={
+            "university_information": True,
+            "id_configuration": True,
+            "academic_years": True,
+            "faculties": True,
+            "departments": True,
+            "programmes": True,
+            "courses": True,
+            "admission_cycle": True,
+            "admission_categories": True,
+            "admission_requirements": True,
+            "application_form": True,
+            "application_fee": True,
+            "staff": True,
+            "role_permission": True,
+            "student_id_configuration": True,
+            "staff_id_configuration": True,
+            "applicant_id_configuration": True,
+            "grading": True,
+            "graduation": True,
+        },
+    )
+    app_repo.applications[app.university_application_id] = app
+    application_id = app.university_application_id
+    user = current_user
+    tenant_repo = MockTenantRepo()
+    identifier_service = MockIdentifierService()
+    audit_repo = MockAuditRepo()
+
+    result = await get_university_application(
+        application_id="UAPP-2026-000002",
+        current_user=current_user,
+        application_repo=app_repo,
+    )
+
+    assert result.university_application_id == "UAPP-2026-000002"
+
+    section_request = UpdateSetupSectionRequest(completed=True)
     updated = await update_application_setup_section(
         application_id,
         "university_information",
@@ -168,22 +317,18 @@ async def test_create_submit_approve_activate_workflow():
         application_repo=app_repo,
         tenant_repo=tenant_repo,
         identifier_service=identifier_service,
-        audit_repo=MockAuditRepo(),
+        audit_repo=audit_repo,
     )
     assert updated.setup_sections["university_information"] is True
 
-    # Mark all sections complete via direct repo update
-    fetched_app = await app_repo.get_by_application_id(application_id)
-    if fetched_app:
-        for section in fetched_app.setup_sections:
-            fetched_app.setup_sections[section] = True
+    # All mandatory sections are already complete for this regression scenario.
     submitted = await submit_university_application_for_review(
         application_id,
         current_user=user,
         application_repo=app_repo,
         tenant_repo=tenant_repo,
         identifier_service=identifier_service,
-        audit_repo=MockAuditRepo(),
+        audit_repo=audit_repo,
     )
     assert submitted.status == "awaiting_super_admin_approval"
 
@@ -193,7 +338,7 @@ async def test_create_submit_approve_activate_workflow():
         application_repo=app_repo,
         tenant_repo=tenant_repo,
         identifier_service=identifier_service,
-        audit_repo=MockAuditRepo(),
+        audit_repo=audit_repo,
     )
     assert approved.status == "provisioning"
 
@@ -203,7 +348,7 @@ async def test_create_submit_approve_activate_workflow():
         application_repo=app_repo,
         tenant_repo=tenant_repo,
         identifier_service=identifier_service,
-        audit_repo=MockAuditRepo(),
+        audit_repo=audit_repo,
     )
     assert activated.status == "active"
 

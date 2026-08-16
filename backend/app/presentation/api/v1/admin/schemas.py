@@ -11,6 +11,7 @@ class AdminCreateUserRequest(BaseModel):
     role: str
     tenant_id: Optional[str] = None
     permissions: Optional[List[str]] = []
+    must_change_password: Optional[bool] = None
 
 class AdminUpdateUserRequest(BaseModel):
     first_name: Optional[str] = None

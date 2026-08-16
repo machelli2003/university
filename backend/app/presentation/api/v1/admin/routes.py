@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from typing import List, Optional
 from datetime import datetime
 from app.dependencies import require_roles, get_user_repo, get_auth_service
@@ -32,15 +32,21 @@ async def list_users(
     user_repo: UserRepository = Depends(get_user_repo),
     current_user: User = Depends(require_roles("university_admin", "super_admin")),
 ):
+    # Single-university mode: tenant selection is disabled.
     if current_user.role.value == "super_admin":
-        users = await user_repo.get_users(tenant_id, include_inactive=include_inactive)
+        users = await user_repo.get_users(include_inactive=include_inactive)
     else:
         users = await user_repo.get_users(current_user.tenant_id, include_inactive=include_inactive)
+        users = [
+            u for u in users
+            if str(getattr(u, "created_by", "")) == str(current_user.id)
+        ]
     return [
         UserResponse(
             id=str(u.id), tenant_id=u.tenant_id, email=u.email, first_name=u.first_name,
             last_name=u.last_name, age=u.age, role=u.role.value, permissions=u.permissions,
             is_active=u.is_active, is_verified=u.is_verified,
+            must_change_password=getattr(u, "must_change_password", False),
             login_attempts=u.login_attempts, locked_until=u.locked_until,
             created_at=u.created_at,
         )
@@ -55,7 +61,8 @@ async def create_user(
     auth_service = Depends(get_auth_service),
     current_user: User = Depends(require_roles("university_admin", "super_admin")),
 ):
-    if await user_repo.exists_by_email(request.email):
+    normalized_email = user_repo.normalize_email(request.email)
+    if await user_repo.exists_by_email(normalized_email):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
     # Normalize and validate role
@@ -64,15 +71,19 @@ async def create_user(
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
+    is_forced_reset = request.must_change_password if request.must_change_password is not None else role == RoleEnum.UNIVERSITY_ADMIN
+
     user_data = {
-        "tenant_id": request.tenant_id if current_user.role.value == "super_admin" and request.tenant_id else current_user.tenant_id,
-        "email": request.email,
+        "tenant_id": current_user.tenant_id or "single-university",
+        "email": normalized_email,
         "first_name": request.first_name,
         "last_name": request.last_name,
         "age": request.age,
         "password_hash": auth_service.hash_password(request.password),
         "role": role,
         "permissions": request.permissions or [],
+        "must_change_password": is_forced_reset,
+        "created_by": str(current_user.id),
     }
 
     user = await user_repo.create(user_data)
@@ -80,6 +91,7 @@ async def create_user(
         id=str(user.id), tenant_id=user.tenant_id, email=user.email, first_name=user.first_name,
         last_name=user.last_name, age=user.age, role=user.role.value, permissions=user.permissions,
         is_active=user.is_active, is_verified=user.is_verified,
+        must_change_password=getattr(user, "must_change_password", False),
         login_attempts=user.login_attempts, locked_until=user.locked_until,
         created_at=user.created_at,
     )
@@ -166,81 +178,35 @@ async def delete_user(
 
 @router.post("/impersonate")
 async def impersonate_tenant(
-    tenant_id: str,
     current_user: User = Depends(require_roles("super_admin")),
-    auth_service = Depends(get_auth_service),
-    tenant_repo=Depends(get_tenant_repo),
-    audit_repo=Depends(get_audit_repo),
 ):
-    # Validate tenant exists
-    tenant = await tenant_repo.get_by_id(tenant_id)
-    if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    # Create short-lived access token scoped to the tenant
-    token = auth_service.create_access_token(str(current_user.id), tenant_id=tenant_id, expires_delta=timedelta(minutes=30))
-
-    # Audit impersonation event
-    await audit_repo.create({
-        "tenant_id": tenant_id,
-        "event_type": "impersonation_started",
-        "entity_type": "tenant",
-        "entity_id": tenant_id,
-        "action": "impersonate_tenant",
-        "performed_by": str(current_user.id),
-        "details": {"impersonated_tenant": tenant_id},
-    })
-
-    return {"access_token": token, "expires_in": 60 * 30, "tenant_id": tenant_id}
+    return {
+        "status": "disabled",
+        "message": "Tenant impersonation is disabled in single-university mode.",
+        "user_id": str(current_user.id),
+    }
 
 
 @router.post("/impersonate/stop")
 async def stop_impersonation(
-    tenant_id: str | None = None,
     current_user: User = Depends(require_roles("super_admin")),
-    audit_repo=Depends(get_audit_repo),
 ):
-    # record end of impersonation
-    await audit_repo.create({
-        "tenant_id": tenant_id or current_user.tenant_id,
-        "event_type": "impersonation_stopped",
-        "entity_type": "tenant",
-        "entity_id": tenant_id or current_user.tenant_id,
-        "action": "stop_impersonation",
-        "performed_by": str(current_user.id),
-        "details": {"tenant_id": tenant_id},
-    })
-
-    # increment Redis metric if available
-    try:
-        settings = get_settings()
-        r = Redis.from_url(settings.REDIS_URL)
-        r.incr("impersonation:stopped")
-    except Exception:
-        pass
-
-    return {"status": "stopped", "tenant_id": tenant_id}
+    return {
+        "status": "stopped",
+        "message": "Single-university mode does not use impersonation.",
+        "user_id": str(current_user.id),
+    }
 
 
 @router.get("/impersonations")
 async def list_impersonations(
-    limit: int = 100,
     current_user: User = Depends(require_roles("super_admin")),
-    audit_repo=Depends(get_audit_repo),
 ):
-    # return recent impersonation audit events
-    cursor = audit_repo.model.find({"event_type": {"$in": ["impersonation_started", "impersonation_stopped"]}}).sort("-created_at").limit(limit)
-    docs = await cursor.to_list()
-    return [
-        {
-            "event_type": d.event_type,
-            "entity_id": getattr(d, "entity_id", None),
-            "performed_by": getattr(d, "performed_by", None),
-            "details": getattr(d, "details", {}),
-            "created_at": d.created_at,
-        }
-        for d in docs
-    ]
+    return {
+        "status": "disabled",
+        "message": "Tenant impersonation is disabled in single-university mode.",
+        "user_id": str(current_user.id),
+    }
 
 
 # --- Staff Role Management ---

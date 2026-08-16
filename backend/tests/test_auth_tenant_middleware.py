@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from fastapi.security import HTTPAuthorizationCredentials
 from app.dependencies import get_current_user, require_roles
 from app.application.auth.login import AuthService
+from app.presentation.api.v1.finance.schemas import TenantCreateRequest
 
 
 class MockUser:
@@ -29,10 +30,10 @@ class MockRequest:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_sets_request_state_for_super_admin_impersonation():
+async def test_get_current_user_keeps_single_university_context():
     auth_service = AuthService(MockUserRepo(None))
-    user = MockUser(id_="super1", role="super_admin")
-    token = auth_service.create_access_token(user.id, tenant_id="tenant123")
+    user = MockUser(id_="super1", role="super_admin", tenant_id="single-university")
+    token = auth_service.create_access_token(user.id, tenant_id="single-university")
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
     request = MockRequest()
 
@@ -43,9 +44,9 @@ async def test_get_current_user_sets_request_state_for_super_admin_impersonation
         request=request,
     )
 
-    assert current_user.tenant_id == "tenant123"
+    assert current_user.tenant_id == "single-university"
     assert request.state.user_id == "super1"
-    assert request.state.tenant_id == "tenant123"
+    assert request.state.tenant_id == "single-university"
 
 
 @pytest.mark.asyncio
@@ -65,3 +66,24 @@ async def test_get_current_user_ignores_tenant_override_for_non_super_admin():
 
     assert current_user.tenant_id == "tenant-origin"
     assert request.state.tenant_id == "tenant-origin"
+
+
+def test_tenant_create_request_defaults_features_to_enabled_set():
+    request = TenantCreateRequest(
+        name="Test University",
+        subdomain="test",
+        admin_email="admin@test.edu",
+    )
+
+    assert request.features == {
+        "admissions": True,
+        "finance": True,
+        "academic": True,
+        "exam": True,
+        "accommodation": True,
+        "library": True,
+        "hr": True,
+        "health": True,
+        "research": True,
+        "alumni": True,
+    }

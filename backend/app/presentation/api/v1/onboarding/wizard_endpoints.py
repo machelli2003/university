@@ -21,6 +21,7 @@ async def update_university_information(
             "event_type": "university_information_updated",
             "entity_type": "university_application",
             "entity_id": application_id,
+            "action": "update_university_information",
             "performed_by": str(current_user.id),
             "details": {"section": "university_information"},
         })
@@ -49,7 +50,9 @@ async def update_id_configuration(
             "event_type": "id_configuration_updated",
             "entity_type": "university_application",
             "entity_id": application_id,
+            "action": "update_id_configuration",
             "performed_by": str(current_user.id),
+            "details": {"section": "id_configuration"},
         })
         return onboarding_schemas.UniversityApplicationResponse.from_orm(application)
     except ValueError as exc:
@@ -67,7 +70,16 @@ async def get_setup_completeness(
     if not application:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="University application not found")
 
-    if current_user.role.value != "super_admin" and application.requested_by != str(current_user.id):
+    # Allow super_admin, original requester, or university_admin accessing their own tenant
+    user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    is_super_admin = user_role in ["super_admin", "superadmin"]
+    is_original_requester = application.requested_by == str(current_user.id)
+    is_tenant_admin = user_role in ["university_admin", "admin"] and (
+        application.tenant_id is None 
+        or current_user.tenant_id == application.tenant_id
+    )
+    
+    if not (is_super_admin or is_original_requester or is_tenant_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     completeness_summary = SetupCompletenessService.get_setup_summary(application.setup_sections)

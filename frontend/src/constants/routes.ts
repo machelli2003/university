@@ -1,6 +1,7 @@
 export const ROUTES = {
   LOGIN: "/login",
   REGISTER: "/register",
+  RESET_PASSWORD: "/reset-password",
   DASHBOARD: "/dashboard",
 
   APPLY: "/apply",
@@ -58,9 +59,13 @@ export const ROUTES = {
 
   ADMIN_DASHBOARD: "/admin",
   ADMIN_USERS: "/admin/users",
-  ADMIN_TENANT_SETTINGS: "/admin/tenant-settings",
+  ADMIN_SETUP: "/admin/academic-setup",
+  ADMIN_UNIVERSITY_SETUP: "/admin/university-setup",
+  ADMIN_TENANT_SETTINGS: "/admin/university-settings",
   ADMIN_UNIVERSITY_APPLICATIONS: "/admin/university-applications",
   STUDENT_DASHBOARD: "/student",
+  STUDENT_TIMETABLE: "/student/timetable",
+  STUDENT_RESULTS: "/student/results",
   LECTURER_DASHBOARD: "/lecturer",
   HOSTEL_ADMIN: "/hostel",
 

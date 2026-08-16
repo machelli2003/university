@@ -33,23 +33,23 @@ SETUP_SECTION_REQUIREMENTS: Dict[str, SetupSectionRequirement] = {
     "programmes": SetupSectionRequirement.MANDATORY,
     "courses": SetupSectionRequirement.MANDATORY,
     "admission_cycle": SetupSectionRequirement.MANDATORY,
-    "admission_categories": SetupSectionRequirement.MANDATORY,
     "admission_requirements": SetupSectionRequirement.MANDATORY,
     "application_form": SetupSectionRequirement.MANDATORY,
     "application_fee": SetupSectionRequirement.MANDATORY,
     "staff": SetupSectionRequirement.MANDATORY,
-    "role_permission": SetupSectionRequirement.MANDATORY,
     "student_id_configuration": SetupSectionRequirement.MANDATORY,
     "staff_id_configuration": SetupSectionRequirement.MANDATORY,
     "applicant_id_configuration": SetupSectionRequirement.MANDATORY,
     "grading": SetupSectionRequirement.MANDATORY,
     "graduation": SetupSectionRequirement.MANDATORY,
+    "finance": SetupSectionRequirement.MANDATORY,
+    "module_enablement": SetupSectionRequirement.MANDATORY,
     
     # Optional sections (can be configured later)
+    "admission_categories": SetupSectionRequirement.OPTIONAL,
+    "role_permission": SetupSectionRequirement.OPTIONAL,
     "hostel": SetupSectionRequirement.OPTIONAL,
-    "finance": SetupSectionRequirement.OPTIONAL,
     "library": SetupSectionRequirement.OPTIONAL,
-    "module_enablement": SetupSectionRequirement.OPTIONAL,
 }
 
 

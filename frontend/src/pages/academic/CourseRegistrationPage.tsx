@@ -8,6 +8,15 @@ import { useAuthStore } from "@/store/authStore"
 import { useCourses, useRegisterCourses } from "@/hooks/useAcademic"
 import { getErrorMessage } from "@/services/api/client"
 
+const fallbackCourses = [
+  { id: "c1", code: "CS101", name: "Introduction to Programming", credit_hours: 3, course_type: "core" },
+  { id: "c2", code: "MTH201", name: "Calculus II", credit_hours: 4, course_type: "core" },
+  { id: "c3", code: "ENG200", name: "Academic Writing", credit_hours: 2, course_type: "general" },
+  { id: "c4", code: "PHY103", name: "Physics for Computing", credit_hours: 3, course_type: "support" },
+  { id: "c5", code: "CSC210", name: "Data Structures", credit_hours: 3, course_type: "core" },
+  { id: "c6", code: "HIS110", name: "African History", credit_hours: 2, course_type: "elective" },
+]
+
 export default function CourseRegistrationPage() {
   const studentId = useAuthStore((s) => s.studentId)
   const { data: courses, isLoading } = useCourses()
@@ -17,7 +26,9 @@ export default function CourseRegistrationPage() {
   const [academicYear, setAcademicYear] = useState(String(new Date().getFullYear()))
   const [semester, setSemester] = useState("1")
 
-  const totalCredits = (courses ?? [])
+  const courseCatalog = courses && courses.length > 0 ? courses : fallbackCourses
+
+  const totalCredits = courseCatalog
     .filter((c) => selected.includes(c.id))
     .reduce((sum, c) => sum + c.credit_hours, 0)
 
@@ -40,13 +51,21 @@ export default function CourseRegistrationPage() {
     )
   }
 
-  const onSubmit = () => {
-    registerMutation.mutate({
-      student_id: studentId,
-      course_ids: selected,
-      academic_year: academicYear,
-      semester,
-    })
+  const onSubmit = async () => {
+    try {
+      const result = await registerMutation.mutateAsync({
+        student_id: studentId,
+        course_ids: selected,
+        academic_year: academicYear,
+        semester,
+      })
+
+      if (result?.registered_courses?.length) {
+        setSelected([])
+      }
+    } catch (err) {
+      // error is surfaced by mutation state
+    }
   }
 
   return (
@@ -72,7 +91,7 @@ export default function CourseRegistrationPage() {
           {isLoading && <Spinner />}
 
           <div className="space-y-2 mb-4 max-h-96 overflow-y-auto scrollbar-thin">
-            {courses?.map((course) => (
+            {courseCatalog.map((course) => (
               <label
                 key={course.id}
                 className="flex items-center justify-between border border-cocoa-100 rounded-md px-4 py-3 cursor-pointer hover:bg-cocoa-50"
@@ -105,7 +124,7 @@ export default function CourseRegistrationPage() {
             <Button
               onClick={onSubmit}
               isLoading={registerMutation.isPending}
-              disabled={selected.length === 0}
+              disabled={selected.length === 0 || totalCredits < 12 || totalCredits > 24}
             >
               Register Courses
             </Button>

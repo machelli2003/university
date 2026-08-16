@@ -10,6 +10,7 @@ class Notification(Document):
     title: str
     message: str
     notification_type: str
+    target_url: Optional[str] = None  # URL to navigate to when notification clicked
 
     is_read: bool = False
     read_at: Optional[datetime] = None

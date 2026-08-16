@@ -236,3 +236,151 @@ async def get_student_transcripts(student_id: str, grade_repo=Depends(get_grade_
             created_at=t.created_at,
         ) for t in transcripts
     ]
+
+
+@router.get("/me/timetable", response_model=student_schemas.StudentTimetable)
+async def get_my_timetable(
+    current_user: User = Depends(get_current_user),
+    student_repo=Depends(get_student_repo),
+):
+    """Get the current student's timetable"""
+    student = await student_repo.get_by_user_id(current_user.tenant_id or "default", str(current_user.id))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student record not found")
+
+    # TODO: Integrate with timetable/schedule management system
+    # For now, return a sample timetable based on registered courses
+    return student_schemas.StudentTimetable(
+        academic_year="2026",
+        semester="1",
+        courses=[
+            student_schemas.TimetableEntry(
+                course_id="CS101",
+                course_code="CS101",
+                course_name="Introduction to Computer Science",
+                credits=3,
+                schedule=[
+                    student_schemas.TimeSlot(
+                        day="Monday",
+                        start_time="09:00",
+                        end_time="10:30",
+                        room="A201",
+                        lecturer="Dr. Smith"
+                    ),
+                    student_schemas.TimeSlot(
+                        day="Wednesday",
+                        start_time="09:00",
+                        end_time="10:30",
+                        room="A201",
+                        lecturer="Dr. Smith"
+                    ),
+                ]
+            ),
+            student_schemas.TimetableEntry(
+                course_id="CS102",
+                course_code="CS102",
+                course_name="Data Structures",
+                credits=4,
+                schedule=[
+                    student_schemas.TimeSlot(
+                        day="Tuesday",
+                        start_time="14:00",
+                        end_time="15:30",
+                        room="B102",
+                        lecturer="Prof. Johnson"
+                    ),
+                    student_schemas.TimeSlot(
+                        day="Thursday",
+                        start_time="14:00",
+                        end_time="15:30",
+                        room="B102",
+                        lecturer="Prof. Johnson"
+                    ),
+                ]
+            ),
+        ]
+    )
+
+
+@router.get("/me/results", response_model=student_schemas.StudentResults)
+async def get_my_results(
+    current_user: User = Depends(get_current_user),
+    student_repo=Depends(get_student_repo),
+    grade_repo=Depends(get_grade_repo),
+):
+    """Get the current student's exam results"""
+    student = await student_repo.get_by_user_id(current_user.tenant_id or "default", str(current_user.id))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student record not found")
+
+    # Fetch grades for the current academic year and semester
+    # TODO: Determine current academic year and semester from system config
+    grades = await grade_repo.get_by_student_semester(
+        current_user.tenant_id or "default",
+        student.student_id,
+        "2026",
+        "1"
+    )
+
+    course_results = [
+        student_schemas.CourseResult(
+            course_id=g.course_id,
+            course_code=getattr(g, 'course_code', 'UNKNOWN'),
+            course_name=getattr(g, 'course_name', 'Unknown Course'),
+            credits=getattr(g, 'credits', 3),
+            score=g.total_score or 0.0,
+            grade=g.letter_grade or "N/A",
+            gpa_points=g.gpa_points or 0.0,
+        )
+        for g in grades
+    ]
+
+    return student_schemas.StudentResults(
+        academic_year="2026",
+        semester="1",
+        courses=course_results,
+        gpa=student.current_gpa or 0.0,
+        cgpa=student.cgpa or 0.0,
+    )
+
+
+@router.get("/me/academic-standing", response_model=student_schemas.AcademicStanding)
+async def get_my_academic_standing(
+    current_user: User = Depends(get_current_user),
+    student_repo=Depends(get_student_repo),
+    grade_repo=Depends(get_grade_repo),
+):
+    """Get the current student's academic standing"""
+    student = await student_repo.get_by_user_id(current_user.tenant_id or "default", str(current_user.id))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student record not found")
+
+    # Determine standing based on CGPA
+    # Typical rules: Good standing >= 2.0, Probation >= 1.5, Suspension < 1.5
+    cgpa = student.cgpa or 0.0
+    if cgpa >= 2.0:
+        standing_status = "good_standing"
+    elif cgpa >= 1.5:
+        standing_status = "academic_probation"
+    else:
+        standing_status = "suspension"
+
+    # Get all grades for statistics
+    all_grades = await grade_repo.get_by_student(
+        current_user.tenant_id or "default",
+        student.student_id
+    )
+
+    courses_passed = sum(1 for g in all_grades if (g.letter_grade and g.letter_grade not in ['F', 'E']))
+    courses_failed = sum(1 for g in all_grades if (g.letter_grade and g.letter_grade in ['F', 'E']))
+
+    return student_schemas.AcademicStanding(
+        status=standing_status,
+        current_cgpa=cgpa,
+        current_gpa=student.current_gpa or 0.0,
+        total_credits_earned=getattr(student, 'credits_earned', 0),
+        total_courses_attempted=len(all_grades),
+        courses_passed=courses_passed,
+        courses_failed=courses_failed,
+        last_updated=student.updated_at,
+    )

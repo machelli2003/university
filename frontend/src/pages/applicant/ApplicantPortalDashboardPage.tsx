@@ -1,6 +1,9 @@
 /**
  * Applicant Portal Dashboard Page
- * Section 34: APPLICANT PORTAL - Dashboard
+ * Section 34: APPLICANT PORTAL - Dashboard (FEE-FIRST FLOW)
+ * 
+ * This page is gated by payment verification.
+ * If payment is not verified, redirects to payment page.
  */
 
 import React, { useState, useEffect } from "react"
@@ -27,6 +30,8 @@ const STATUS_COLORS: Record<string, string> = {
   awaiting_results: "bg-yellow-100 text-yellow-800",
   results_uploaded: "bg-orange-100 text-orange-800",
   results_approved: "bg-green-100 text-green-800",
+  payment_pending: "bg-yellow-100 text-yellow-800",
+  payment_verified: "bg-green-100 text-green-800",
   eligible: "bg-green-100 text-green-800",
   ineligible: "bg-red-100 text-red-800",
   ranked: "bg-purple-100 text-purple-800",
@@ -42,6 +47,7 @@ export default function ApplicantPortalDashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [paymentRequired, setPaymentRequired] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
   useEffect(() => {
@@ -64,6 +70,10 @@ export default function ApplicantPortalDashboardPage() {
       } catch (err: any) {
         if (err.response?.status === 401) {
           navigate(`/apply/${schoolCode}/login`)
+        } else if (err.response?.status === 402) {
+          // Payment required gate (FEE-FIRST FLOW)
+          setPaymentRequired(true)
+          setError(err.response?.data?.detail || "Payment verification required")
         } else {
           setError("Failed to load dashboard")
         }
@@ -86,7 +96,35 @@ export default function ApplicantPortalDashboardPage() {
     )
   }
 
-  if (error) {
+  // Payment required gate
+  if (paymentRequired) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100 flex items-center justify-center px-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+          <div className="text-5xl mb-4">⏳</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Required</h1>
+          <p className="text-gray-700 mb-6">
+            {error || "Your application fee payment must be verified before you can access your application form."}
+          </p>
+          <Button
+            onClick={() => navigate(`/apply/${schoolCode}/payment`)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-3"
+          >
+            Complete Payment
+          </Button>
+          <Button
+            onClick={() => navigate(`/apply/${schoolCode}/login`)}
+            variant="outline"
+            className="w-full"
+          >
+            Back to Login
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !paymentRequired) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md">

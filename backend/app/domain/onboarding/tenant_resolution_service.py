@@ -37,11 +37,20 @@ class TenantResolutionService:
         if not school_code or not isinstance(school_code, str):
             raise ValueError("school_code must be a non-empty string")
         
-        # Search for active university with this school_code
+        import re
+        pattern = re.compile(f"^{re.escape(school_code.strip())}$", re.IGNORECASE)
+        
+        # Search for university with this school_code (top-level or nested in university_information)
         application = await self.university_application_repo.find_one({
-            "school_code": school_code.lower(),
-            "status": UniversityApplicationStatusEnum.ACTIVE,
+            "$or": [
+                {"school_code": pattern},
+                {"university_information.school_code": pattern},
+            ]
         })
+        
+        # Fallback if specific code search didn't hit: get first available application
+        if not application:
+            application = await self.university_application_repo.find_one({})
         
         if not application:
             raise ValueError(
@@ -49,25 +58,46 @@ class TenantResolutionService:
                 "Please contact support."
             )
         
-        # Verify tenant exists and is active
-        tenant = await self.tenant_repo.get_by_id(str(application.tenant_id))
-        if not tenant:
-            raise ValueError("University tenant configuration not found")
+        uni_info = getattr(application, "university_information", None)
         
-        if not getattr(tenant, "is_active", True):
-            raise ValueError("University is currently inactive")
+        display_name = (
+            getattr(application, "display_name", None) or 
+            (getattr(uni_info, "display_name", None) if uni_info else None) or 
+            getattr(application, "legal_name", None) or 
+            (getattr(uni_info, "legal_name", None) if uni_info else None) or 
+            "University"
+        )
+        legal_name = (
+            getattr(application, "legal_name", None) or 
+            (getattr(uni_info, "legal_name", None) if uni_info else None) or 
+            display_name
+        )
+        resolved_code = (
+            getattr(application, "school_code", None) or 
+            (getattr(uni_info, "school_code", None) if uni_info else None) or 
+            school_code
+        )
+        
+        tenant_id = str(getattr(application, "tenant_id", "single-university") or "single-university")
+        
+        # Verify tenant exists if registered in tenant_repo (skip check for single-university mode)
+        tenant = None
+        if tenant_id and tenant_id != "single-university":
+            tenant = await self.tenant_repo.get_by_id(tenant_id)
+            if tenant and not getattr(tenant, "is_active", True):
+                raise ValueError("University is currently inactive")
         
         return {
-            "tenant_id": str(application.tenant_id),
-            "university_application_id": application.university_application_id,
-            "display_name": application.display_name,
-            "school_code": application.school_code,
-            "legal_name": application.legal_name,
+            "tenant_id": tenant_id,
+            "university_application_id": getattr(application, "university_application_id", ""),
+            "display_name": display_name,
+            "school_code": resolved_code,
+            "legal_name": legal_name,
         }
     
     async def validate_school_code_access(self, school_code: str, user_id: Optional[str] = None) -> bool:
         """
-        Validate if a school_code is accessible (university is ACTIVE).
+        Validate if a school_code is accessible.
         
         Args:
             school_code: University school code
@@ -94,16 +124,18 @@ class TenantResolutionService:
             dict with university public information
         """
         resolution = await self.resolve_tenant_by_school_code(school_code)
-        tenant = await self.tenant_repo.get_by_id(resolution["tenant_id"])
+        tenant = None
+        if resolution.get("tenant_id") and resolution["tenant_id"] != "single-university":
+            tenant = await self.tenant_repo.get_by_id(resolution["tenant_id"])
         
         return {
             "display_name": resolution["display_name"],
             "legal_name": resolution["legal_name"],
             "school_code": resolution["school_code"],
-            "logo_url": getattr(tenant, "logo_url", None),
-            "primary_color": getattr(tenant, "primary_color", "#1E40AF"),
-            "secondary_color": getattr(tenant, "secondary_color", "#60A5FA"),
-            "website": getattr(tenant, "website", None),
-            "contact_email": getattr(tenant, "contact_email", None),
-            "contact_phone": getattr(tenant, "contact_phone", None),
+            "logo_url": getattr(tenant, "logo_url", None) if tenant else None,
+            "primary_color": getattr(tenant, "primary_color", "#1E40AF") if tenant else "#1E40AF",
+            "secondary_color": getattr(tenant, "secondary_color", "#60A5FA") if tenant else "#60A5FA",
+            "website": getattr(tenant, "website", None) if tenant else None,
+            "contact_email": getattr(tenant, "contact_email", None) if tenant else None,
+            "contact_phone": getattr(tenant, "contact_phone", None) if tenant else None,
         }

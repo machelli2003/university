@@ -22,7 +22,9 @@ class RoleEnum(str, Enum):
     AUDITOR = "auditor"
 
 class User(Document):
-    tenant_id: Optional[str] = None
+    # Single-university compatibility field. The platform now runs as one institutional
+    # deployment, so all users are scoped to the same university context.
+    tenant_id: Optional[str] = "single-university"
     email: Indexed(EmailStr, unique=True)
     first_name: str
     last_name: str
@@ -31,9 +33,11 @@ class User(Document):
     password_hash: str
     role: RoleEnum
     permissions: List[str] = []
+    created_by: Optional[str] = None
 
     is_active: bool = True
     is_verified: bool = False
+    must_change_password: bool = False
     email_verified_at: Optional[datetime] = None
 
     mfa_enabled: bool = False

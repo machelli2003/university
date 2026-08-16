@@ -44,11 +44,11 @@ export default function TenantSettingsPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const selectedTenantId = useAuthStore((s) => s.selectedTenantId)
+  const storeSelectedTenantId = useAuthStore((s) => s.selectedTenantId)
+  const selectedTenantId = storeSelectedTenantId || "single-university"
 
   useEffect(() => {
     async function loadTenant() {
-      if (!selectedTenantId) return
       setLoading(true)
       setError(null)
       try {
@@ -80,7 +80,6 @@ export default function TenantSettingsPage() {
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!selectedTenantId) return
     setSaving(true)
     setError(null)
     try {
@@ -93,23 +92,12 @@ export default function TenantSettingsPage() {
     }
   }
 
-  if (!selectedTenantId) {
-    return (
-      <AppShell>
-        <div className="space-y-4">
-          <h1 className="font-display text-2xl font-semibold text-ink">Tenant Settings</h1>
-          <p className="text-cocoa-400">Select a tenant from the tenant switcher to manage settings.</p>
-        </div>
-      </AppShell>
-    )
-  }
-
   return (
     <AppShell>
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Tenant Settings</h1>
-          <p className="text-cocoa-400">Edit branding, contact information, and feature access for your tenant.</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">University Settings</h1>
+          <p className="text-cocoa-400">Configure the University of Machelli branding, contacts, and feature access.</p>
         </div>
 
         <form onSubmit={handleSave} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -172,7 +160,7 @@ export default function TenantSettingsPage() {
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" isLoading={saving}>Save tenant settings</Button>
+            <Button type="submit" isLoading={saving}>Save university settings</Button>
           </div>
 
           <div className="space-y-4">
@@ -197,7 +185,7 @@ export default function TenantSettingsPage() {
 
             <Card className="border border-cocoa-100 p-4">
               <CardHeader>
-                <CardTitle>Tenant Information</CardTitle>
+                <CardTitle>University Information</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm text-cocoa-600">

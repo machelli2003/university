@@ -15,6 +15,14 @@ export function useLogin() {
       setAuth(data.user, data.access_token, data.refresh_token)
       navigate(ROUTES.DASHBOARD)
     },
+    onError: (error: any) => {
+      const data = error?.response?.data
+      const user = data?.user
+      if (error?.response?.status === 403 && (user || data?.detail?.includes("Password reset required"))) {
+        sessionStorage.setItem("pendingPasswordResetUser", JSON.stringify(user || { email: "" }))
+        navigate(ROUTES.RESET_PASSWORD)
+      }
+    },
   })
 }
 

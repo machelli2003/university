@@ -111,6 +111,12 @@ class Applicant(Document):
     status: ApplicationStatusEnum = ApplicationStatusEnum.DRAFT
     application_date: datetime = Field(default_factory=datetime.utcnow)
 
+    # Payment Tracking (Fee-First Flow)
+    application_id: Optional[str] = None  # Unique ID assigned after payment
+    payment_verified: bool = False  # Whether payment has been confirmed
+    payment_verified_at: Optional[datetime] = None  # When payment was verified
+    payment_id: Optional[str] = None  # Reference to Payment record
+
     index_number: Optional[str] = None
     exam_year: Optional[int] = None
     exam_type: Optional[str] = None

@@ -1,6 +1,9 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 from app.presentation.api.v1.admissions.schemas import (
     CreateApplicantRequest, SubmitApplicationRequest, SubmitResultsRequest,
     WAECVerifyRequest, ApproveResultsRequest, RejectResultsRequest,
@@ -834,3 +837,306 @@ async def notify_offer(
     })
 
     return _to_response(applicant)
+
+
+@router.post("/applicant/{applicant_id}/issue-credentials", tags=["Permanent Credentials"])
+async def issue_real_credentials(
+    applicant_id: str,
+    current_user: User = Depends(require_roles("admissions_officer", "registrar", "university_admin", "super_admin")),
+    applicant_repo=Depends(get_applicant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Issue permanent credentials (username + temporary password) to an applicant after OFFERED decision.
+    
+    Called by admissions officer when applicant is marked as OFFERED.
+    The applicant will receive real credentials to use instead of PIN+Serial.
+    
+    Workflow:
+    1. Admissions officer marks applicant as OFFERED
+    2. System calls this endpoint
+    3. Permanent credentials generated (username + temp password)
+    4. ApplicationForm marked as expired (PIN/Serial no longer valid)
+    5. Credentials sent via email to applicant
+    """
+    try:
+        from app.infrastructure.database.repositories.application_form_repository import ApplicationFormRepository
+        from app.infrastructure.services.permanent_credential_service import PermanentCredentialService
+        
+        # Get applicant
+        applicant = await applicant_repo.get_by_id(applicant_id)
+        if not applicant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Applicant not found"
+            )
+        
+        # Verify applicant status is OFFERED
+        if applicant.status != "offered":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Applicant status is {applicant.status}, not OFFERED. Only OFFERED applicants can receive real credentials."
+            )
+        
+        # Get application form
+        app_form_repo = ApplicationFormRepository()
+        app_form = await app_form_repo.get_by_applicant_id(str(applicant.user_id))
+        
+        if not app_form:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No application form found for this applicant"
+            )
+        
+        # Check if credentials already issued
+        if app_form.has_real_credentials:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Real credentials already issued for this applicant"
+            )
+        
+        # Generate credentials
+        cred_service = PermanentCredentialService()
+        credentials = await cred_service.issue_credentials_for_applicant(
+            application_form=app_form,
+            issued_by=str(current_user.id),
+        )
+        
+        # Update applicant with decision info
+        applicant.application_decision = "OFFERED"
+        applicant.decision_date = datetime.utcnow()
+        await applicant_repo.save(applicant)
+        
+        # Audit log
+        await audit_repo.create({
+            "tenant_id": current_user.tenant_id,
+            "event_type": "credentials_issued",
+            "entity_type": "applicant",
+            "entity_id": applicant_id,
+            "action": "issue_real_credentials",
+            "performed_by": str(current_user.id),
+            "details": {
+                "username": credentials["username"],
+                "credential_id": credentials["credential_id"],
+                "activation_deadline": credentials["activation_deadline"].isoformat(),
+            },
+        })
+        
+        # Send email with credentials
+        from app.infrastructure.services.credential_email_service import CredentialEmailService
+        email_service = CredentialEmailService()
+        
+        user = await get_user_repo().get_by_id(str(applicant.user_id))
+        if user:
+            await email_service.send_real_credentials(
+                recipient_email=user.email,
+                first_name=user.first_name or "Student",
+                username=credentials["username"],
+                temporary_password=credentials["temporary_password"],
+                activation_deadline=credentials["activation_deadline"],
+            )
+        
+        return {
+            "success": True,
+            "message": "Real credentials generated and issued",
+            "credential_id": credentials["credential_id"],
+            "username": credentials["username"],
+            "activation_deadline": credentials["activation_deadline"],
+            "must_change_password": credentials["must_change_password"],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error issuing credentials to applicant {applicant_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to issue credentials: {str(e)}"
+        )
+
+
+@router.post("/credentials/batch-issue", tags=["Credentials"])
+async def batch_issue_credentials(
+    admission_cycle_id: str,
+    status_filter: str = "offered",
+    current_user: User = Depends(require_roles("admissions_officer", "registrar", "university_admin", "super_admin")),
+    applicant_repo=Depends(get_applicant_repo),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Batch issue credentials to all OFFERED applicants in a cycle.
+    
+    Admin endpoint for bulk credential issuance after admissions decisions.
+    
+    Query Parameters:
+    - admission_cycle_id: The admission cycle to process
+    - status_filter: Filter applicants by status (default: "offered")
+    
+    Returns:
+        Summary of issued credentials with success/failure counts
+    """
+    try:
+        from app.infrastructure.database.repositories.application_form_repository import ApplicationFormRepository
+        from app.infrastructure.services.permanent_credential_service import PermanentCredentialService
+        from app.infrastructure.services.credential_email_service import CredentialEmailService
+        
+        app_form_repo = ApplicationFormRepository()
+        cred_service = PermanentCredentialService()
+        email_service = CredentialEmailService()
+        user_repo = get_user_repo()
+        
+        # Get all applicants with specified status in this cycle
+        query = {
+            "admission_cycle_id": admission_cycle_id,
+            "status": status_filter,
+        }
+        applicants = await applicant_repo.model.find(query).to_list(None)
+        
+        results = {
+            "total": len(applicants),
+            "issued": 0,
+            "already_issued": 0,
+            "errors": [],
+        }
+        
+        for applicant in applicants:
+            try:
+                # Get application form
+                app_form = await app_form_repo.get_by_applicant_id(str(applicant.user_id))
+                
+                if not app_form:
+                    results["errors"].append({
+                        "applicant_id": str(applicant.id),
+                        "reason": "No application form found"
+                    })
+                    continue
+                
+                # Check if already issued
+                if app_form.has_real_credentials:
+                    results["already_issued"] += 1
+                    continue
+                
+                # Generate and issue credentials
+                credentials = await cred_service.issue_credentials_for_applicant(
+                    application_form=app_form,
+                    issued_by=str(current_user.id),
+                )
+                
+                # Send email
+                user = await user_repo.get_by_id(str(applicant.user_id))
+                if user:
+                    await email_service.send_real_credentials(
+                        recipient_email=user.email,
+                        first_name=user.first_name or "Student",
+                        username=credentials["username"],
+                        temporary_password=credentials["temporary_password"],
+                        activation_deadline=credentials["activation_deadline"],
+                    )
+                
+                results["issued"] += 1
+                
+                # Audit log
+                await audit_repo.create({
+                    "tenant_id": current_user.tenant_id,
+                    "event_type": "batch_credentials_issued",
+                    "entity_type": "applicant",
+                    "entity_id": str(applicant.id),
+                    "action": "batch_issue_real_credentials",
+                    "performed_by": str(current_user.id),
+                    "details": {
+                        "username": credentials["username"],
+                        "credential_id": credentials["credential_id"],
+                    },
+                })
+                
+            except Exception as e:
+                logger.error(f"Error issuing credentials to applicant {applicant.id}: {e}")
+                results["errors"].append({
+                    "applicant_id": str(applicant.id),
+                    "reason": str(e)
+                })
+        
+        return {
+            "success": True,
+            "message": f"Batch credential issuance completed",
+            "admission_cycle_id": admission_cycle_id,
+            "results": results,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in batch credential issuance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch issuance failed: {str(e)}"
+        )
+
+
+@router.get("/credentials/statistics", tags=["Credentials"])
+async def get_credential_statistics(
+    admission_cycle_id: str,
+    current_user: User = Depends(require_roles("admissions_officer", "registrar", "university_admin", "super_admin")),
+    applicant_repo=Depends(get_applicant_repo),
+):
+    """
+    Get credential statistics for an admission cycle.
+    
+    Returns:
+        Statistics on credential generation and status
+    """
+    try:
+        from app.infrastructure.database.repositories.permanent_credential_repository import PermanentCredentialRepository
+        
+        cred_repo = PermanentCredentialRepository()
+        
+        # Get statistics
+        total_applicants = await applicant_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+        }).count()
+        
+        offered_applicants = await applicant_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+            "status": "offered",
+        }).count()
+        
+        total_credentials_issued = await cred_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+        }).count()
+        
+        active_credentials = await cred_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+            "is_active": True,
+        }).count()
+        
+        logins_count = await cred_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+            "last_login_at": {"$exists": True},
+        }).count()
+        
+        password_changes = await cred_repo.model.find({
+            "admission_cycle_id": admission_cycle_id,
+            "is_temporary_password": False,
+        }).count()
+        
+        return {
+            "success": True,
+            "admission_cycle_id": admission_cycle_id,
+            "statistics": {
+                "total_applicants": total_applicants,
+                "offered_applicants": offered_applicants,
+                "offer_rate_percent": (offered_applicants / max(total_applicants, 1)) * 100,
+                "total_credentials_issued": total_credentials_issued,
+                "credential_issuance_rate_percent": (total_credentials_issued / max(offered_applicants, 1)) * 100,
+                "active_credentials": active_credentials,
+                "applicants_who_logged_in": logins_count,
+                "applicants_who_changed_password": password_changes,
+                "activation_rate_percent": (password_changes / max(total_credentials_issued, 1)) * 100,
+            },
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting credential statistics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get statistics: {str(e)}"
+        )
+

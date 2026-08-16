@@ -3,8 +3,8 @@
  * Section 34: APPLICANT PORTAL - Login
  */
 
-import React, { useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import React, { useState, useEffect } from "react"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import axios from "axios"
@@ -12,10 +12,21 @@ import axios from "axios"
 export default function ApplicantPortalLoginPage() {
   const { schoolCode } = useParams<{ schoolCode: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetMode, setResetMode] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  useEffect(() => {
+    const tempPassword = searchParams.get("tempPassword")
+    if (tempPassword) {
+      setPassword(tempPassword)
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,15 +45,56 @@ export default function ApplicantPortalLoginPage() {
         localStorage.setItem("refresh_token", response.data.refresh_token)
         localStorage.setItem("current_user", JSON.stringify(response.data.user))
 
-        // Redirect to dashboard
-        navigate(`/apply/${schoolCode}/dashboard`)
+        navigate(`/apply/${schoolCode}/payment`)
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail || "Login failed. Please check your credentials and try again."
-      )
+      const resetRequired = err.response?.status === 403 || err.response?.headers?.["x-password-reset-required"] === "true"
+      if (resetRequired) {
+        setResetMode(true)
+        setError("Your account requires a password reset before you can continue.")
+      } else {
+        setError(
+          err.response?.data?.detail || "Login failed. Please check your credentials and try again."
+        )
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters long")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("New password and confirmation do not match")
+      return
+    }
+
+    try {
+      await axios.post("/api/v1/auth/reset-password", {
+        email,
+        current_password: password,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      })
+
+      setResetMode(false)
+      setError(null)
+      setNewPassword("")
+      setConfirmPassword("")
+      const response = await axios.post(`/api/v1/auth/login`, { email, password: newPassword }, { withCredentials: true })
+      localStorage.setItem("access_token", response.data.access_token)
+      localStorage.setItem("refresh_token", response.data.refresh_token)
+      localStorage.setItem("current_user", JSON.stringify(response.data.user))
+      navigate(`/apply/${schoolCode}/payment`)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Password reset failed. Please try again.")
     }
   }
 
@@ -58,55 +110,93 @@ export default function ApplicantPortalLoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full"
-            />
-          </div>
+        {resetMode ? (
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <div>
+              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <Input
+                id="newPassword"
+                type="password"
+                placeholder="Enter your new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full"
-            />
-          </div>
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm New Password
+              </label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm your new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center">
-              <input type="checkbox" className="rounded border-gray-300 mr-2" />
-              <span className="text-gray-600">Remember me</span>
-            </label>
-            <a href="#" className="text-blue-600 hover:text-blue-700 font-medium">
-              Forgot password?
-            </a>
-          </div>
+            <Button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700">
+              Reset password and continue
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </Button>
-        </form>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center">
+                <input type="checkbox" className="rounded border-gray-300 mr-2" />
+                <span className="text-gray-600">Remember me</span>
+              </label>
+              <a href="#" className="text-blue-600 hover:text-blue-700 font-medium">
+                Forgot password?
+              </a>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
+          </form>
+        )}
 
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
           <p className="text-gray-600 text-sm">

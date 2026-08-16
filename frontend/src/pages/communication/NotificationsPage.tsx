@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
@@ -6,6 +7,7 @@ import { Spinner } from "@/components/ui/Feedback"
 import { useMyNotifications, useMarkAsRead } from "@/hooks/useCommunication"
 
 export default function NotificationsPage() {
+  const navigate = useNavigate()
   const { data: notifications, isLoading } = useMyNotifications()
   const markReadMutation = useMarkAsRead()
 
@@ -18,7 +20,11 @@ export default function NotificationsPage() {
 
       <div className="space-y-2">
         {notifications?.map((n) => (
-          <Card key={n.id} className={n.is_read ? "opacity-60" : ""}>
+          <Card 
+            key={n.id} 
+            className={`${n.is_read ? "opacity-60" : ""} ${n.target_url ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+            onClick={() => n.target_url && navigate(n.target_url)}
+          >
             <CardContent className="flex items-center justify-between py-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -28,7 +34,10 @@ export default function NotificationsPage() {
                 <p className="text-xs text-cocoa-400 mt-0.5">{n.message}</p>
               </div>
               {!n.is_read && (
-                <Button size="sm" variant="ghost" onClick={() => markReadMutation.mutate(n.id)}>
+                <Button size="sm" variant="ghost" onClick={(e) => {
+                  e.stopPropagation()
+                  markReadMutation.mutate(n.id)
+                }}>
                   Mark read
                 </Button>
               )}

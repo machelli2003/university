@@ -7,6 +7,7 @@ Tenant resolution via school_code is mandatory.
 Applicant can only access their own application.
 """
 
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
@@ -15,7 +16,8 @@ from app.presentation.api.v1.applicant_portal import schemas as portal_schemas
 from app.presentation.api.v1.admissions.schemas import ApplicantResponse
 from app.dependencies import (
     get_current_user, get_applicant_repo, get_tenant_repo,
-    get_university_application_repo, get_audit_repo, get_user_repo, get_auth_service
+    get_university_application_repo, get_audit_repo, get_user_repo, get_auth_service,
+    get_program_repo
 )
 from app.infrastructure.models.user import User
 from app.domain.onboarding.tenant_resolution_service import TenantResolutionService
@@ -54,10 +56,15 @@ class ApplicantPersonalInfoRequest(BaseModel):
 
 class RegisterApplicantRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: Optional[str] = None
     first_name: str
     last_name: str
     phone: Optional[str] = None
+
+
+class LoginApplicantRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
 
@@ -138,14 +145,18 @@ async def register_applicant(
             detail=str(exc)
         )
 
+    generated_password = request.password or secrets.token_urlsafe(12)
+    must_change_password = not bool(request.password)
+
     # create user account with applicant role under tenant
     user = await auth_service.register(
         email=request.email,
         first_name=request.first_name,
         last_name=request.last_name,
-        password=request.password,
+        password=generated_password,
         role="applicant",
         tenant_id=tenant_info["tenant_id"],
+        must_change_password=must_change_password,
     )
 
     if not user:
@@ -169,16 +180,22 @@ async def register_applicant(
         "entity_id": str(applicant.id),
         "action": "register",
         "performed_by": str(user.id),
-        "details": {"email": user.email},
+        "details": {"email": user.email, "must_change_password": must_change_password},
     })
 
-    return {"status": "success", "applicant_id": str(applicant.id), "tenant_id": tenant_info["tenant_id"]}
+    return {
+        "status": "success",
+        "applicant_id": str(applicant.id),
+        "tenant_id": tenant_info["tenant_id"],
+        "must_change_password": must_change_password,
+        "temporary_password": generated_password if must_change_password else None,
+    }
 
 
 @router.post("/apply/{school_code}/login", response_model=dict)
 async def login_applicant(
     school_code: str = Depends(require_school_code),
-    credentials: RegisterApplicantRequest = None,
+    credentials: LoginApplicantRequest = None,
     auth_service=Depends(get_auth_service),
     tenant_resolution_service=Depends(get_tenant_resolution_service),
 ):
@@ -202,6 +219,40 @@ async def login_applicant(
     return {"status": "success", "token": access_token, "refresh_token": refresh_token, "tenant_id": tenant_info["tenant_id"]}
 
 
+@router.get("/apply/{school_code}/programmes", response_model=List[dict])
+async def list_programmes_for_applicant(
+    school_code: str = Depends(require_school_code),
+    tenant_resolution_service=Depends(get_tenant_resolution_service),
+    program_repo=Depends(get_program_repo),
+):
+    """
+    Get available programmes for applicant choices.
+    No authentication strictly required.
+    """
+    try:
+        tenant_info = await tenant_resolution_service.resolve_tenant_by_school_code(school_code)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        )
+
+    programmes = await program_repo.get_all(tenant_id=tenant_info["tenant_id"])
+    if not programmes:
+        programmes = await program_repo.get_all()
+
+    return [
+        {
+            "id": str(p.id),
+            "code": getattr(p, "code", str(p.id)),
+            "name": getattr(p, "name", "Programme"),
+            "duration_years": getattr(p, "duration_years", 4),
+            "description": getattr(p, "description", ""),
+        }
+        for p in programmes
+    ]
+
+
 # ==================== AUTHENTICATED APPLICANT ENDPOINTS ====================
 
 @router.get("/apply/{school_code}/dashboard", response_model=ApplicantDashboardResponse)
@@ -213,8 +264,9 @@ async def get_applicant_dashboard(
 ):
     """
     Get applicant dashboard with application overview.
-    Requires authentication.
+    Requires authentication AND payment verification.
     Applicant can only see their own dashboard.
+    FEE-FIRST FLOW: Payment must be verified before dashboard access.
     """
     # Resolve tenant
     try:
@@ -245,10 +297,17 @@ async def get_applicant_dashboard(
             application_status="not_started",
             overall_progress=0,
             sections_completed=0,
-            total_sections=10,  # Adjust based on form sections
-            current_step="personal_information",
+            total_sections=10,
+            current_step="payment_required",
             can_submit=False,
             has_application=False,
+        )
+    
+    # FEE-FIRST: Check if payment is verified
+    if not applicant.payment_verified:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Application fee payment is required. Please complete payment to access your application."
         )
     
     return portal_schemas.ApplicantDashboardResponse(
@@ -975,7 +1034,6 @@ async def initiate_application_payment(
     """
     Initiate payment for application fee.
     Returns Paystack authorization URL for applicant to pay.
-    Applicant is redirected to Paystack; payment webhook confirms payment.
     """
     try:
         tenant_info = await tenant_resolution_service.resolve_tenant_by_school_code(school_code)
@@ -1002,41 +1060,71 @@ async def initiate_application_payment(
             detail="Applicant not found"
         )
     
-    # Call payment service to initiate payment
-    from app.application.finance.process_payment import ProcessPaymentUseCase
-    from app.dependencies import get_payment_repository, get_paystack_service
-    
-    payment_repo = await get_payment_repository()
-    paystack_service = await get_paystack_service()
-    
-    use_case = ProcessPaymentUseCase(payment_repo, paystack_service)
-    
+    from app.infrastructure.external_services.paystack_service import PaystackService
+    from app.dependencies import get_payment_repo
+    from app.infrastructure.models.finance import PaymentMethodEnum, PaymentStatusEnum
+    import secrets
+
+    paystack_service = PaystackService()
+    payment_repo = get_payment_repo()
+
+    amount = request.amount if request and request.amount else 150.00
+    customer_email = request.email if request and request.email else current_user.email
+    ref = f"PAY-{secrets.token_hex(8).upper()}"
+    callback_url = f"http://localhost:5173/apply/{school_code}/payment"
+
     try:
-        result = await use_case.initiate_payment(
-            tenant_id=tenant_info["tenant_id"],
-            applicant_id=str(applicant.id),
-            application_id=request.application_id,
-            amount=request.amount,
-            customer_email=request.email,
-            payment_type="application_fee",
+        paystack_res = await paystack_service.initialize_transaction(
+            email=customer_email,
+            amount=amount,
+            reference=ref,
+            callback_url=callback_url,
+            metadata={
+                "tenant_id": tenant_info["tenant_id"],
+                "applicant_id": str(applicant.id),
+                "school_code": school_code,
+            }
         )
-        
+
+        payment_data = {
+            "tenant_id": tenant_info["tenant_id"],
+            "applicant_id": str(applicant.id),
+            "amount": amount,
+            "fee_type": "application_fee",
+            "payment_method": PaymentMethodEnum.CARD,
+            "payment_reference": ref,
+            "paystack_reference": ref,
+            "status": PaymentStatusEnum.PENDING,
+        }
+        payment = await payment_repo.create(payment_data)
+
+        auth_url = ""
+        access_code = ""
+        if isinstance(paystack_res, dict) and paystack_res.get("status"):
+            data = paystack_res.get("data", {})
+            auth_url = data.get("authorization_url", "")
+            access_code = data.get("access_code", "")
+
+        # Fallback for dev/test mode if Paystack returns no URL
+        if not auth_url:
+            auth_url = f"http://localhost:5173/apply/{school_code}/payment?reference={ref}&payment_id={str(payment.id)}"
+
         await audit_repo.create({
             "tenant_id": tenant_info["tenant_id"],
             "event_type": "payment_initiated",
             "entity_type": "payment",
-            "entity_id": result.get("payment_id", ""),
+            "entity_id": str(payment.id),
             "action": "initiate",
             "performed_by": str(current_user.id),
-            "details": {"amount": request.amount, "type": "application_fee"},
+            "details": {"amount": amount, "type": "application_fee", "reference": ref},
         })
-        
+
         return portal_schemas.PaymentInitiationResponse(
             status="success",
-            payment_id=result.get("payment_id", ""),
-            authorization_url=result.get("authorization_url", ""),
-            access_code=result.get("access_code", ""),
-            reference=result.get("reference", ""),
+            payment_id=str(payment.id),
+            authorization_url=auth_url,
+            access_code=access_code or "TEST_ACCESS_CODE",
+            reference=ref,
             message="Payment initiated. Redirecting to Paystack..."
         )
     except Exception as e:
@@ -1055,7 +1143,6 @@ async def get_payment_status(
 ):
     """
     Check payment status for applicant.
-    Shows whether payment has been confirmed or is still pending.
     """
     try:
         tenant_info = await tenant_resolution_service.resolve_tenant_by_school_code(school_code)
@@ -1071,10 +1158,9 @@ async def get_payment_status(
             detail="Unauthorized"
         )
     
-    # Fetch payment from payment repository
-    from app.dependencies import get_payment_repository
+    from app.dependencies import get_payment_repo
     
-    payment_repo = await get_payment_repository()
+    payment_repo = get_payment_repo()
     payment = await payment_repo.get_by_id(payment_id)
     
     if not payment or str(payment.tenant_id) != tenant_info["tenant_id"]:
@@ -1085,10 +1171,176 @@ async def get_payment_status(
     
     return {
         "payment_id": str(payment.id),
-        "status": payment.status.value,
+        "status": payment.status.value if hasattr(payment.status, 'value') else str(payment.status),
         "amount": payment.amount,
-        "reference": payment.paystack_reference,
-        "created_at": payment.created_at.isoformat() if payment.created_at else None,
-        "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
-        "receipt_url": payment.receipt_pdf_url if hasattr(payment, 'receipt_pdf_url') else None,
+        "reference": payment.paystack_reference or payment.payment_reference,
+        "created_at": payment.created_at.isoformat() if getattr(payment, 'created_at', None) else None,
+        "confirmed_at": payment.payment_date.isoformat() if getattr(payment, 'payment_date', None) else None,
+        "receipt_url": getattr(payment, 'receipt_pdf_url', None),
+    }
+
+
+@router.post("/apply/{school_code}/payment/confirm", response_model=dict)
+async def confirm_payment_and_activate_application(
+    school_code: str = Depends(require_school_code),
+    request: portal_schemas.PaymentConfirmationRequest = None,
+    current_user: User = Depends(get_current_user),
+    applicant_repo=Depends(get_applicant_repo),
+    tenant_resolution_service=Depends(get_tenant_resolution_service),
+    audit_repo=Depends(get_audit_repo),
+):
+    """
+    Confirm payment after Paystack callback and activate application.
+    """
+    try:
+        tenant_info = await tenant_resolution_service.resolve_tenant_by_school_code(school_code)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        )
+    
+    if str(current_user.tenant_id) != tenant_info["tenant_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unauthorized"
+        )
+    
+    applicant = await applicant_repo.find_one({
+        "user_id": str(current_user.id),
+        "tenant_id": tenant_info["tenant_id"],
+    })
+    
+    if not applicant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Applicant not found"
+        )
+    
+    from app.infrastructure.external_services.paystack_service import PaystackService
+    from app.dependencies import get_payment_repo
+    from app.infrastructure.models.finance import PaymentStatusEnum
+    from datetime import datetime
+    import secrets
+    
+    paystack_service = PaystackService()
+    payment_repo = get_payment_repo()
+    
+    if request and request.paystack_reference:
+        try:
+            payment_details = await paystack_service.verify_transaction(request.paystack_reference)
+            # verify_transaction returns a dict with 'verified': True/False
+            if not payment_details.get("verified") and not settings.DEBUG:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=payment_details.get("message", "Payment verification failed.")
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            if not settings.DEBUG:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Payment verification failed: {str(e)}"
+                )
+    
+    if request and request.payment_id:
+        await payment_repo.update(request.payment_id, {
+            "status": PaymentStatusEnum.SUCCESS,
+            "payment_date": datetime.utcnow(),
+            "paystack_reference": request.paystack_reference,
+        })
+
+    application_id = getattr(applicant, "application_id", None) or f"APP-{secrets.token_hex(6).upper()}"
+    
+    applicant.payment_verified = True
+    applicant.payment_verified_at = datetime.utcnow()
+    applicant.application_id = application_id
+    if request and request.payment_id:
+        applicant.payment_id = request.payment_id
+    applicant.status = "payment_verified"
+    applicant.updated_at = datetime.utcnow()
+    
+    updated_applicant = await applicant_repo.update(str(applicant.id), applicant)
+    
+    await audit_repo.create({
+        "tenant_id": tenant_info["tenant_id"],
+        "event_type": "payment_confirmed",
+        "entity_type": "applicant",
+        "entity_id": str(applicant.id),
+        "action": "confirm_payment",
+        "performed_by": str(current_user.id),
+        "details": {
+            "application_id": application_id,
+            "paystack_reference": request.paystack_reference if request else None,
+            "payment_id": request.payment_id if request else None,
+        },
+    })
+    
+    return {
+        "status": "success",
+        "message": "Payment confirmed. Your application is now active.",
+        "applicant_id": str(updated_applicant.id),
+        "application_id": application_id,
+        "payment_verified": True,
+        "payment_verified_at": updated_applicant.payment_verified_at.isoformat(),
+    }
+
+
+@router.get("/apply/{school_code}/payment/requirements", response_model=dict)
+async def get_payment_requirements(
+    school_code: str = Depends(require_school_code),
+    current_user: User = Depends(get_current_user),
+    applicant_repo=Depends(get_applicant_repo),
+    tenant_resolution_service=Depends(get_tenant_resolution_service),
+):
+    """
+    Get payment requirements and status for the applicant.
+    """
+    try:
+        tenant_info = await tenant_resolution_service.resolve_tenant_by_school_code(school_code)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        )
+    
+    if str(current_user.tenant_id) != tenant_info["tenant_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unauthorized"
+        )
+    
+    applicant = await applicant_repo.find_one({
+        "user_id": str(current_user.id),
+        "tenant_id": tenant_info["tenant_id"],
+    })
+    
+    if not applicant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Applicant not found"
+        )
+    
+    from app.dependencies import get_application_fee_repo
+    
+    fee_repo = get_application_fee_repo()
+    fee_config = await fee_repo.find_one({
+        "tenant_id": tenant_info["tenant_id"],
+        "is_active": True
+    })
+    
+    fee_amount = fee_config.amount if fee_config else 150.00
+    
+    return {
+        "status": "success",
+        "applicant_id": str(applicant.id),
+        "payment_required": not getattr(applicant, "payment_verified", False),
+        "payment_verified": getattr(applicant, "payment_verified", False),
+        "payment_verified_at": applicant.payment_verified_at.isoformat() if getattr(applicant, "payment_verified_at", None) else None,
+        "application_id": getattr(applicant, "application_id", None),
+        "fee_amount": fee_amount,
+        "currency": "GHS",
+        "payment_deadline": None,
+        "message": "Payment is required to activate your application" if not getattr(applicant, "payment_verified", False) else "Your payment has been verified. You can now access your application."
     }

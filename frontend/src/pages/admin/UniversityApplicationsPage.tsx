@@ -1,139 +1,120 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
-import { Button } from "@/components/ui/Button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
-import { Input } from "@/components/ui/Input"
-import { Textarea } from "@/components/ui/Textarea"
-import { ErrorAlert, Spinner, SuccessAlert } from "@/components/ui/Feedback"
-import { useCreateUniversityApplication, useMyUniversityApplications } from "@/hooks/useOnboarding"
-import type { CreateUniversityApplicationRequest } from "@/types/onboarding"
-
-const defaultValues: CreateUniversityApplicationRequest = {
-  legal_name: "",
-  display_name: "",
-  school_code: "",
-  admin_first_name: "",
-  admin_last_name: "",
-  admin_email: "",
-  institution_type: "",
-  is_public: false,
-  location: "",
-  region: "",
-  country: "",
-  postal_address: "",
-  official_email: "",
-  official_phone: "",
-  website: "",
-  logo_url: "",
-  favicon_url: "",
-  description: "",
-  academic_calendar_type: "",
-  timezone: "",
-  currency: "",
-}
+import { onboardingApi, type UniversityApplicationResponse } from "@/services/api/onboarding"
+import { useAuthStore } from "@/store/authStore"
+import { getErrorMessage } from "@/services/api/client"
+import { Plus, ChevronRight } from "lucide-react"
 
 export default function UniversityApplicationsPage() {
-  const [form, setForm] = useState<CreateUniversityApplicationRequest>(defaultValues)
-  const [message, setMessage] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const [applications, setApplications] = useState<UniversityApplicationResponse[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const applicationsQuery = useMyUniversityApplications()
-  const createMutation = useCreateUniversityApplication()
+  useEffect(() => {
+    loadApplications()
+  }, [])
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setMessage(null)
-    setError(null)
-
+  async function loadApplications() {
     try {
-      await createMutation.mutateAsync(form)
-      setMessage("University application created successfully.")
-      setForm(defaultValues)
-      applicationsQuery.refetch()
+      const data = await onboardingApi.listApplications()
+      setApplications(data)
     } catch (err) {
-      setError((err as Error).message)
+      setError(getErrorMessage(err))
+    } finally {
+      setLoading(false)
     }
   }
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    draft: { label: "Draft", color: "bg-gray-100 text-gray-800" },
+    pending_setup: { label: "Pending Setup", color: "bg-blue-100 text-blue-800" },
+    submitted: { label: "Submitted", color: "bg-yellow-100 text-yellow-800" },
+    awaiting_super_admin_approval: { label: "Awaiting Approval", color: "bg-yellow-100 text-yellow-800" },
+    approved: { label: "Approved", color: "bg-green-100 text-green-800" },
+    provisioning: { label: "Provisioning", color: "bg-blue-100 text-blue-800" },
+    active: { label: "Active", color: "bg-green-100 text-green-800" },
+    rejected: { label: "Rejected", color: "bg-red-100 text-red-800" },
+  }
+
+  if (loading)
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-cocoa-600">Loading applications...</p>
+        </div>
+      </AppShell>
+    )
 
   return (
     <AppShell>
       <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink mb-1">University Onboarding</h1>
-          <p className="text-cocoa-400">Create a new university application for onboarding and review pending tenant requests.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-ink mb-1">University Applications</h1>
+            <p className="text-cocoa-400">
+              {user?.role === "super_admin"
+                ? "Review and manage all university applications"
+                : "View and manage your university applications"}
+            </p>
+          </div>
+          {user?.role === "super_admin" && (
+            <button
+              onClick={() => navigate("/admin/university-application/new")}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> New Application
+            </button>
+          )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New University Application</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {error && <ErrorAlert message={error} />}
-            {message && <SuccessAlert message={message} />}
+        {error && <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>}
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Input label="Legal name" value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} required />
-                <Input label="Display name" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
-                <Input label="School code" value={form.school_code} onChange={(e) => setForm({ ...form, school_code: e.target.value })} required />
-                <Input label="Admin first name" value={form.admin_first_name} onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })} required />
-                <Input label="Admin last name" value={form.admin_last_name} onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })} required />
-                <Input label="Admin email" type="email" value={form.admin_email} onChange={(e) => setForm({ ...form, admin_email: e.target.value })} required />
-                <Input label="Official email" type="email" value={form.official_email} onChange={(e) => setForm({ ...form, official_email: e.target.value })} />
-                <Input label="Official phone" value={form.official_phone} onChange={(e) => setForm({ ...form, official_phone: e.target.value })} />
-                <Input label="Country" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
-                <Input label="Timezone" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
-                <Input label="Website" type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
-                <Input label="Logo URL" type="url" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} />
-                <Input label="Favicon URL" type="url" value={form.favicon_url} onChange={(e) => setForm({ ...form, favicon_url: e.target.value })} />
-                <Input label="Institution type" value={form.institution_type} onChange={(e) => setForm({ ...form, institution_type: e.target.value })} />
-                <Input label="Postal address" value={form.postal_address} onChange={(e) => setForm({ ...form, postal_address: e.target.value })} />
-              </div>
-              <Textarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <Button type="submit" isLoading={createMutation.isPending}>Create application</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending Applications</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {applicationsQuery.isLoading && (
-              <div className="flex justify-center py-8">
-                <Spinner className="h-8 w-8" />
-              </div>
+        {applications.length === 0 ? (
+          <div className="rounded-lg border border-cocoa-100 bg-white p-8 text-center">
+            <p className="text-cocoa-600 mb-4">No applications yet.</p>
+            {user?.role === "super_admin" && (
+              <button
+                onClick={() => navigate("/admin/university-application/new")}
+                className="btn btn-primary inline-flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" /> Create First Application
+              </button>
             )}
-            {applicationsQuery.isError && (
-              <ErrorAlert message="Unable to load applications." />
-            )}
-            {applicationsQuery.data && applicationsQuery.data.length === 0 && !applicationsQuery.isLoading && (
-              <p className="text-sm text-cocoa-500">No university applications found.</p>
-            )}
-            {applicationsQuery.data && applicationsQuery.data.length > 0 && (
-              <div className="space-y-3">
-                {applicationsQuery.data.map((application) => (
-                  <div key={application.id} className="rounded-lg border border-cocoa-100 p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-ink">{application.legal_name}</p>
-                        <p className="text-xs text-cocoa-500">{application.school_code}</p>
-                      </div>
-                      <div className="text-sm text-cocoa-500">
-                        {application.status.replace(/_/g, " ")}
-                      </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {applications.map((app) => {
+              const status = statusConfig[app.status] || statusConfig.draft
+              return (
+                <div
+                  key={app.id}
+                  onClick={() => navigate(`/admin/university-applications/${app.university_application_id}`)}
+                  className="rounded-lg border border-cocoa-100 p-4 bg-white hover:border-cocoa-200 hover:bg-cocoa-50 cursor-pointer transition"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-ink">{app.legal_name}</h3>
+                      <p className="text-sm text-cocoa-600 mt-1">
+                        {app.school_code} • {app.admin_first_name} {app.admin_last_name}
+                      </p>
+                      <p className="text-sm text-cocoa-500 mt-2">
+                        {Object.values(app.setup_sections).filter(Boolean).length} of{" "}
+                        {Object.keys(app.setup_sections).length} sections complete
+                      </p>
                     </div>
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm text-cocoa-600">
-                      <div>Requested by: {application.requested_by}</div>
-                      <div>Tenant: {application.tenant_id ?? "Unassigned"}</div>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${status.color}`}>{status.label}</span>
+                      <ChevronRight className="h-5 w-5 text-cocoa-400" />
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </AppShell>
   )

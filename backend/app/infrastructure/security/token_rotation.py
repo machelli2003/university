@@ -10,8 +10,11 @@ Implements:
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-import jwt
+from typing import Optional, Dict, Any, List
+try:
+    import jwt
+except ImportError:
+    from jose import jwt
 import logging
 from app.config import get_settings
 from app.infrastructure.models.user import User

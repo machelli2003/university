@@ -155,40 +155,46 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
-    # If token contains an explicit tenant_id (impersonation), and the
-    # authenticated user is a super_admin, override the in-memory tenant_id
-    # so downstream handlers operate in the acting tenant context.
-    token_tenant = payload.get("tenant_id")
-    try:
-        if token_tenant and user.role.value == "super_admin":
-            setattr(user, "impersonating", True)
-            setattr(user, "impersonated_tenant_id", token_tenant)
-            user.tenant_id = token_tenant
-    except Exception:
-        pass
-
     if request is not None:
         request.state.user_id = str(user.id)
         request.state.tenant_id = getattr(user, "tenant_id", None)
 
     return user
 
-def require_roles(*allowed_roles: str):
+from typing import Any
+
+def require_roles(*allowed_roles: Any):
     """Dependency factory for role-based access control"""
+    # Normalize inputs: support positional args require_roles("a", "b") and lists require_roles(["a", "b"])
+    flat_roles = []
+    for r in allowed_roles:
+        if isinstance(r, (list, tuple, set)):
+            flat_roles.extend(r)
+        else:
+            flat_roles.append(r)
+    roles_set = set(flat_roles)
+
     async def role_checker(current_user: User = Depends(get_current_user), request: Request = None) -> User:
+        if request is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Request context is required")
+
+        user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+
         # Auditor is a read-only compliance role: allow for safe (GET) requests only
-        if current_user.role.value == "auditor":
-            if request is None or request.method != "GET":
+        if user_role == "auditor":
+            if request.method != "GET":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Auditor role is read-only"
                 )
             return current_user
 
-        if current_user.role.value not in allowed_roles:
+        if user_role not in roles_set:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires one of roles: {', '.join(allowed_roles)}"
+                detail=f"Requires one of roles: {', '.join(sorted(roles_set))}"
             )
+
+        # Single-university mode: all authenticated users operate in the same university context.
         return current_user
     return role_checker

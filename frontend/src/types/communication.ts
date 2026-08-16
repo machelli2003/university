@@ -3,6 +3,7 @@ export interface NotificationItem {
   title: string
   message: string
   is_read: boolean
+  target_url?: string
 }
 
 export interface SendNotificationRequest {

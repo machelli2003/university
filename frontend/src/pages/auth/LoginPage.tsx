@@ -32,7 +32,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <GraduationCap className="h-10 w-10 text-cocoa-600 mb-2" />
-          <h1 className="font-display text-2xl font-semibold text-ink">EUMP</h1>
+          <h1 className="font-display text-2xl font-semibold text-ink text-center">University of Machelli</h1>
           <p className="text-sm text-cocoa-400 mt-1">Sign in to your account</p>
         </div>
 

@@ -5,18 +5,17 @@ import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Button } from "@/components/ui/Button"
 import { useAuditSummary, useAuditList } from "@/hooks/useAudit"
-import { useTenants } from "@/hooks/useTenant"
 import { auditApi } from "@/services/api/audit"
+import { useAuthStore } from "@/store/authStore"
 import { formatDistanceToNow } from "date-fns"
 
 export default function AuditorPage() {
   const auditQuery = useAuditSummary()
+  const user = useAuthStore((s) => s.user)
   const [eventFilter, setEventFilter] = useState<string>("")
   const [search, setSearch] = useState<string>("")
-  const [tenantFilter, setTenantFilter] = useState<string>("")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
-  const tenantsQuery = useTenants(false)
   const [exportJobId, setExportJobId] = useState<string | null>(null)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
 
@@ -63,7 +62,7 @@ export default function AuditorPage() {
   const listQuery = useAuditList(page, pageSize, {
     event_type: eventFilter || undefined,
     performed_by: search || undefined,
-    tenant_id: tenantFilter || undefined,
+    tenant_id: user?.tenant_id || undefined,
     start_date: startDate || undefined,
     end_date: endDate || undefined,
   })
@@ -130,12 +129,6 @@ export default function AuditorPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 items-end">
-                  <Select value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)}>
-                    <option value="">All tenants</option>
-                    {tenantsQuery.data?.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </Select>
                   <Select value={eventFilter} onChange={(e) => setEventFilter(e.target.value)}>
                     <option value="">All Event Types</option>
                     {eventTypes.map((t) => (
@@ -158,7 +151,7 @@ export default function AuditorPage() {
                         const params: Record<string, any> = {
                           event_type: eventFilter || undefined,
                           performed_by: search || undefined,
-                          tenant_id: tenantFilter || undefined,
+                          tenant_id: user?.tenant_id || undefined,
                           start_date: startDate || undefined,
                           end_date: endDate || undefined,
                         }

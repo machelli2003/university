@@ -42,6 +42,21 @@ def get_paystack_service() -> PaystackService:
 
 
 def build_tenant_response(tenant: Any) -> TenantResponse:
+    features = getattr(tenant, "features", None)
+    if not isinstance(features, dict):
+        features = {
+            "admissions": True,
+            "finance": True,
+            "academic": True,
+            "exam": True,
+            "accommodation": True,
+            "library": True,
+            "hr": True,
+            "health": True,
+            "research": True,
+            "alumni": True,
+        }
+
     return TenantResponse(
         id=str(tenant.id),
         name=tenant.name,
@@ -61,7 +76,7 @@ def build_tenant_response(tenant: Any) -> TenantResponse:
         subscription_end=tenant.subscription_end,
         is_active=tenant.is_active,
         is_trial=tenant.is_trial,
-        features=tenant.features,
+        features=features,
     )
 
 def get_email_service() -> EmailService:
@@ -662,7 +677,9 @@ async def create_tenant(
     if await tenant_repo.exists(subdomain=request.subdomain):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant subdomain already exists")
 
-    tenant = await tenant_repo.create(request.dict())
+    payload = request.model_dump(exclude_none=True)
+    payload.setdefault("features", request.features)
+    tenant = await tenant_repo.create(payload)
     return build_tenant_response(tenant)
 
 

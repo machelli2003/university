@@ -28,12 +28,12 @@ export default function AdminUsersPage() {
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", age: "", password: "", role: "university_admin" })
   const [editingUser, setEditingUser] = useState<any | null>(null)
   const [includeInactive, setIncludeInactive] = useState(false)
-  const selectedTenantId = useAuthStore((s) => s.selectedTenantId)
+  const user = useAuthStore((s) => s.user)
 
   async function load() {
     setLoading(true)
     try {
-      const res = await adminApi.listUsers(selectedTenantId ?? undefined, includeInactive)
+      const res = await adminApi.listUsers(user?.tenant_id ?? undefined, includeInactive)
       setUsers(res.data)
     } catch (err) {
       setError(getErrorMessage(err))
@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     load()
-  }, [selectedTenantId, includeInactive])
+  }, [user?.tenant_id, includeInactive])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink mb-1">User Management</h1>
-          <p className="text-cocoa-400 mb-6">Create, edit, deactivate, and recover accounts for your tenant.</p>
+          <p className="text-cocoa-400 mb-6">Create, edit, deactivate, and recover university accounts.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_1.5fr]">
@@ -213,15 +213,17 @@ export default function AdminUsersPage() {
 
           <div className="rounded-lg border border-cocoa-100 p-4">
             <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-medium text-ink">Tenant users</h2>
-              <label className="flex items-center gap-2 text-sm text-cocoa-600">
-                <input
-                  type="checkbox"
-                  checked={includeInactive}
-                  onChange={(e) => setIncludeInactive(e.target.checked)}
-                />
-                Show inactive
-              </label>
+              <h2 className="text-lg font-medium text-ink">University users</h2>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm text-cocoa-600">
+                  <input
+                    type="checkbox"
+                    checked={includeInactive}
+                    onChange={(e) => setIncludeInactive(e.target.checked)}
+                  />
+                  Show inactive
+                </label>
+              </div>
             </div>
 
             {loading ? (

@@ -111,3 +111,9 @@ class PaymentInitiationResponse(BaseModel):
     access_code: str
     reference: str
     message: str
+
+
+class PaymentConfirmationRequest(BaseModel):
+    """Request to confirm payment after Paystack callback."""
+    paystack_reference: str  # Paystack payment reference/receipt number
+    payment_id: str  # Our payment ID

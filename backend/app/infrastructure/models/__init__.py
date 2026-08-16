@@ -21,6 +21,8 @@ from .inventory import Inventory, Asset, MaintenanceSchedule
 from .timetable import Timetable, Venue, TimeSlot
 from .audit import AuditLog
 from .staff_assignment import StaffAssignment
+from .application_form import ApplicationForm, ApplicationFormStatusEnum
+from .permanent_credential import PermanentCredential, CredentialStatusEnum
 
 __all__ = [
     "User", "Role", "Permission",
@@ -46,4 +48,6 @@ __all__ = [
     "Timetable", "Venue", "TimeSlot",
     "AuditLog",
     "StaffAssignment",
+    "ApplicationForm", "ApplicationFormStatusEnum",
+    "PermanentCredential", "CredentialStatusEnum",
 ]

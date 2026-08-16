@@ -6,14 +6,20 @@ class UserRepository(BaseRepository[User]):
     def __init__(self):
         super().__init__(User)
 
+    @staticmethod
+    def normalize_email(email: str) -> str:
+        return (email or "").strip().lower()
+
     async def get_by_email(self, email: str) -> Optional[User]:
-        return await self.model.find_one({"email": email})
+        normalized = self.normalize_email(email)
+        return await self.model.find_one({"email": normalized})
 
     async def get_by_tenant_and_role(self, tenant_id: str, role: str) -> List[User]:
         return await self.model.find({"tenant_id": tenant_id, "role": role}).to_list(None)
 
     async def exists_by_email(self, email: str) -> bool:
-        return await self.model.find_one({"email": email}) is not None
+        normalized = self.normalize_email(email)
+        return await self.model.find_one({"email": normalized}) is not None
 
     async def get_users(self, tenant_id: Optional[str] = None, include_inactive: bool = False) -> List[User]:
         query = {}

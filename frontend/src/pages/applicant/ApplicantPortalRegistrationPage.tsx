@@ -1,6 +1,9 @@
 /**
  * Applicant Portal Registration Page
- * Section 34: APPLICANT PORTAL - Registration
+ * Section 34: APPLICANT PORTAL - Registration (FEE-FIRST FLOW)
+ * 
+ * After registration, applicant is redirected to payment page.
+ * Payment must be completed before accessing the application form.
  */
 
 import React, { useState } from "react"
@@ -62,32 +65,57 @@ export default function ApplicantPortalRegistrationPage() {
     setLoading(true)
 
     try {
-      // Register user
-      const registerResponse = await axios.post(`/api/v1/auth/register`, {
+      const registerResponse = await axios.post(`/api/v1/apply/${schoolCode}/register`, {
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
         password: formData.password,
         phone: formData.phone,
-        date_of_birth: formData.date_of_birth,
-        gender: formData.gender,
-        region: formData.region,
       })
 
-      if (registerResponse.data.user) {
-        // Auto-login after registration
-        const loginResponse = await axios.post(`/api/v1/auth/login`, {
-          email: formData.email,
-          password: formData.password,
-        })
+      if (registerResponse.data.status === "success") {
+        const tempPassword = registerResponse.data.temporary_password
 
-        if (loginResponse.data.access_token) {
-          localStorage.setItem("access_token", loginResponse.data.access_token)
-          localStorage.setItem("refresh_token", loginResponse.data.refresh_token)
-          localStorage.setItem("current_user", JSON.stringify(loginResponse.data.user))
+        // If temporary password was generated (must_change_password = true)
+        if (tempPassword) {
+          // Login with temporary password first
+          try {
+            const loginResponse = await axios.post(`/api/v1/auth/login`, {
+              email: formData.email,
+              password: tempPassword,
+            })
 
-          // Redirect to dashboard
-          navigate(`/apply/${schoolCode}/dashboard`)
+            if (loginResponse.data.access_token) {
+              localStorage.setItem("access_token", loginResponse.data.access_token)
+              localStorage.setItem("refresh_token", loginResponse.data.refresh_token)
+              localStorage.setItem("current_user", JSON.stringify(loginResponse.data.user))
+              
+              // FEE-FIRST FLOW: Redirect to payment (required gate before form access)
+              navigate(`/apply/${schoolCode}/payment`)
+            }
+          } catch (loginErr: any) {
+            setError("Registration successful but login failed. Please try logging in manually.")
+          }
+          return
+        }
+
+        // Otherwise login with provided password
+        try {
+          const loginResponse = await axios.post(`/api/v1/auth/login`, {
+            email: formData.email,
+            password: formData.password,
+          })
+
+          if (loginResponse.data.access_token) {
+            localStorage.setItem("access_token", loginResponse.data.access_token)
+            localStorage.setItem("refresh_token", loginResponse.data.refresh_token)
+            localStorage.setItem("current_user", JSON.stringify(loginResponse.data.user))
+            
+            // FEE-FIRST FLOW: Redirect to payment (required gate before form access)
+            navigate(`/apply/${schoolCode}/payment`)
+          }
+        } catch (loginErr: any) {
+          setError("Registration successful but login failed. Please try logging in manually.")
         }
       }
     } catch (err: any) {
@@ -102,9 +130,9 @@ export default function ApplicantPortalRegistrationPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Application</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Your Account</h1>
         <p className="text-gray-600 mb-6">
-          Step {step} of 4: {step === 1 ? "Personal Information" : step === 2 ? "Contact Details" : step === 3 ? "Academic Info" : "Security"}
+          Step {step} of 3
         </p>
 
         {error && (
@@ -113,12 +141,12 @@ export default function ApplicantPortalRegistrationPage() {
           </div>
         )}
 
-        <form onSubmit={step === 4 ? handleRegister : (e) => { e.preventDefault(); handleNextStep(); }} className="space-y-4">
-          {/* Step 1: Personal Information */}
+        <form onSubmit={handleRegister} className="space-y-4">
+          {/* Step 1: Name */}
           {step === 1 && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
                   First Name
                 </label>
                 <Input
@@ -130,9 +158,8 @@ export default function ApplicantPortalRegistrationPage() {
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
                   Last Name
                 </label>
                 <Input
@@ -144,57 +171,27 @@ export default function ApplicantPortalRegistrationPage() {
                   required
                 />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date of Birth
-                </label>
-                <Input
-                  type="date"
-                  name="date_of_birth"
-                  value={formData.date_of_birth}
-                  onChange={handleInputChange}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Gender
-                </label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
             </>
           )}
 
-          {/* Step 2: Contact Details */}
+          {/* Step 2: Contact */}
           {step === 2 && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Email
                 </label>
                 <Input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  placeholder="you@example.com"
+                  placeholder="john@example.com"
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
                   Phone Number
                 </label>
                 <Input
@@ -202,58 +199,31 @@ export default function ApplicantPortalRegistrationPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  placeholder="+233 5XX XXX XXX"
+                  placeholder="0201234567"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Region
-                </label>
-                <Input
-                  type="text"
-                  name="region"
-                  value={formData.region}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Ashanti Region"
                 />
               </div>
             </>
           )}
 
-          {/* Step 3: Academic Info */}
+          {/* Step 3: Password */}
           {step === 3 && (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-gray-700">
-                Academic information will be collected during the application process.
-                You'll be prompted to enter your WASSCE results and programme choices.
-              </p>
-            </div>
-          )}
-
-          {/* Step 4: Security */}
-          {step === 4 && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Create Password
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Password
                 </label>
                 <Input
                   type="password"
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="••••••••"
+                  placeholder="Enter password"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  At least 8 characters, including uppercase, lowercase, and numbers
-                </p>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
                   Confirm Password
                 </label>
                 <Input
@@ -261,40 +231,43 @@ export default function ApplicantPortalRegistrationPage() {
                   name="password_confirm"
                   value={formData.password_confirm}
                   onChange={handleInputChange}
-                  placeholder="••••••••"
+                  placeholder="Confirm password"
                   required
                 />
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-lg text-sm">
-                <label className="flex items-start">
-                  <input type="checkbox" className="mt-1 mr-2" required />
-                  <span className="text-gray-700">
-                    I agree to the <a href="#" className="text-blue-600 hover:underline">terms of service</a> and <a href="#" className="text-blue-600 hover:underline">privacy policy</a>
-                  </span>
-                </label>
               </div>
             </>
           )}
 
+          {/* Navigation Buttons */}
           <div className="flex gap-3 pt-4">
             {step > 1 && (
               <Button
                 type="button"
-                variant="outline"
                 onClick={handlePrevStep}
+                variant="outline"
                 className="flex-1"
               >
                 Back
               </Button>
             )}
-            <Button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-            >
-              {loading ? "Processing..." : step === 4 ? "Create Account" : "Next"}
-            </Button>
+            {step < 3 && (
+              <Button
+                type="button"
+                onClick={handleNextStep}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Next
+              </Button>
+            )}
+            {step === 3 && (
+              <Button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              >
+                {loading ? "Creating Account..." : "Create Account"}
+              </Button>
+            )}
           </div>
         </form>
 

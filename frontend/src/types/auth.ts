@@ -8,6 +8,7 @@ export type UserRole =
   | "finance_officer"
   | "hostel_administrator"
   | "librarian"
+  | "examination_officer"
   | "counselor"
   | "lecturer"
   | "student"
@@ -26,6 +27,7 @@ export interface User {
   permissions: string[]
   is_active: boolean
   is_verified: boolean
+  must_change_password?: boolean
   login_attempts?: number
   locked_until?: string | null
   created_at: string

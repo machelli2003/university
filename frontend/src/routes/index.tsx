@@ -4,6 +4,7 @@ import { ROUTES } from "@/constants/routes"
 
 import LoginPage from "@/pages/auth/LoginPage"
 import RegisterPage from "@/pages/auth/RegisterPage"
+import ResetPasswordPage from "@/pages/auth/ResetPasswordPage"
 import DashboardPage from "@/pages/DashboardPage"
 
 // Applicant Portal Pages (Section 33-34)
@@ -13,6 +14,9 @@ import ApplicantPortalRegistrationPage from "@/pages/applicant/ApplicantPortalRe
 import ApplicantPortalDashboardPage from "@/pages/applicant/ApplicantPortalDashboardPage"
 import ApplicantPortalPaymentPage from "@/pages/applicant/ApplicantPortalPaymentPage"
 import ApplicantWASSCEEntryPage from "@/pages/applicant/ApplicantWASSCEEntryPage"
+import OfferAcceptancePage from "@/pages/applicant/OfferAcceptancePage"
+import ApplicantApplicationFormPage from "@/pages/applicant/ApplicantApplicationFormPage"
+import ApplicantDocumentsPage from "@/pages/applicant/ApplicantDocumentsPage"
 
 import ApplicationStatusPage from "@/pages/applicant/ApplicationStatusPage"
 import PendingResultsPage from "@/pages/officer/PendingResultsPage"
@@ -22,6 +26,7 @@ import ApplicantDetailPage from "@/pages/officer/ApplicantDetailPage"
 import WaitlistPage from "@/pages/officer/WaitlistPage"
 import OfficerWASSCEVerificationPage from "@/pages/officer/OfficerWASSCEVerificationPage"
 import AdmissionsOfficerDashboardPage from "@/pages/officer/AdmissionsOfficerDashboardPage"
+import ApplicationReviewPage from "@/pages/officer/ApplicationReviewPage"
 import RegistrarDashboardPage from "@/pages/officer/RegistrarDashboardPage"
 import HODDashboardPage from "@/pages/officer/HODDashboardPage"
 import DeanDashboardPage from "@/pages/officer/DeanDashboardPage"
@@ -58,6 +63,7 @@ import InventoryPage from "@/pages/inventory/InventoryPage"
 import AnalyticsDashboardPage from "@/pages/analytics/AnalyticsDashboardPage"
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage"
 import AdminUsersPage from "@/pages/admin/AdminUsersPage"
+import AcademicSetupPage from "@/pages/admin/AcademicSetupPage"
 import TenantSettingsPage from "@/pages/admin/TenantSettingsPage"
 import RegistrarPage from "@/pages/admin/RegistrarPage"
 import HeadOfDepartmentPage from "@/pages/admin/HeadOfDepartmentPage"
@@ -66,7 +72,14 @@ import FinanceOfficerPage from "@/pages/admin/FinanceOfficerPage"
 import SuperAdminPage from "@/pages/admin/SuperAdminPage"
 import AuditorPage from "@/pages/admin/AuditorPage"
 import UniversityApplicationsPage from "@/pages/admin/UniversityApplicationsPage"
+import UniversityApplicationFormPage from "@/pages/admin/UniversityApplicationFormPage"
+import UniversityApplicationDetailPage from "@/pages/admin/UniversityApplicationDetailPage"
+import SuperAdminReviewPage from "@/pages/admin/SuperAdminReviewPage"
+import RoleSetupPage from "@/pages/admin/RoleSetupPage"
+import UniversitySetupWizardPage from "@/pages/admin/UniversitySetupWizardPage"
 import StudentDashboardPage from "@/pages/student/StudentDashboardPage"
+import StudentResultsPage from "@/pages/student/StudentResultsPage"
+import TimetablePage from "@/pages/student/TimetablePage"
 import LecturerDashboardPage from "@/pages/lecturer/LecturerDashboardPage"
 import AttendancePage from "@/pages/lecturer/AttendancePage"
 import LecturerRosterPage from "@/pages/lecturer/LecturerRosterPage"
@@ -99,6 +112,7 @@ export function AppRoutes() {
       <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+      <Route path={ROUTES.RESET_PASSWORD} element={<ResetPasswordPage />} />
       <Route path={ROUTES.UNAUTHORIZED} element={<UnauthorizedPage />} />
 
       {/* Applicant Portal Routes (Section 33-34) */}
@@ -107,13 +121,20 @@ export function AppRoutes() {
       <Route path="/apply/:schoolCode/register" element={<ApplicantPortalRegistrationPage />} />
       <Route path="/apply/:schoolCode/dashboard" element={<ApplicantPortalDashboardPage />} />
       <Route path="/apply/:schoolCode/payment" element={<ApplicantPortalPaymentPage />} />
+      <Route path="/apply/:schoolCode/application" element={<ApplicantApplicationFormPage />} />
+      <Route path="/apply/:schoolCode/documents" element={<ApplicantDocumentsPage />} />
       <Route path="/apply/:schoolCode/wassce" element={<ApplicantWASSCEEntryPage />} />
+      <Route path="/apply/:schoolCode/offer/:offerId/accept" element={<OfferAcceptancePage />} />
       {/* Additional applicant portal pages will be added in next sections */}
 
       <Route path={ROUTES.DASHBOARD} element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
 
       {/* Admissions */}
       <Route path={ROUTES.APPLICATION_STATUS} element={<PrivateRoute><ApplicationStatusPage /></PrivateRoute>} />
+      <Route
+        path="/officer/applications/:applicationId/review"
+        element={<PrivateRoute allowedRoles={OFFICER_ROLES}><ApplicationReviewPage /></PrivateRoute>}
+      />
       {/* Officer Dashboards */}
       <Route
         path="/officer/dashboard/admissions"
@@ -279,6 +300,10 @@ export function AppRoutes() {
         element={<PrivateRoute allowedRoles={ADMIN_ROLES}><TenantSettingsPage /></PrivateRoute>}
       />
       <Route
+        path={ROUTES.ADMIN_SETUP}
+        element={<PrivateRoute allowedRoles={ADMIN_ROLES}><AcademicSetupPage /></PrivateRoute>}
+      />
+      <Route
         path={ROUTES.REGISTRAR}
         element={<PrivateRoute allowedRoles={["registrar", "university_admin", "super_admin"]}><RegistrarPage /></PrivateRoute>}
       />
@@ -307,8 +332,36 @@ export function AppRoutes() {
         element={<PrivateRoute allowedRoles={["super_admin", "university_admin"]}><UniversityApplicationsPage /></PrivateRoute>}
       />
       <Route
+        path="/admin/university-application/new"
+        element={<PrivateRoute allowedRoles={["super_admin"]}><UniversityApplicationFormPage /></PrivateRoute>}
+      />
+      <Route
+        path="/admin/university-applications/:applicationId"
+        element={<PrivateRoute allowedRoles={["super_admin", "university_admin"]}><UniversityApplicationDetailPage /></PrivateRoute>}
+      />
+      <Route
+        path="/admin/super-admin-review"
+        element={<PrivateRoute allowedRoles={["super_admin"]}><SuperAdminReviewPage /></PrivateRoute>}
+      />
+      <Route
+        path="/admin/role-setup"
+        element={<PrivateRoute allowedRoles={["university_admin", "super_admin"]}><RoleSetupPage /></PrivateRoute>}
+      />
+      <Route
+        path={ROUTES.ADMIN_UNIVERSITY_SETUP}
+        element={<PrivateRoute allowedRoles={["university_admin", "super_admin"]}><UniversitySetupWizardPage /></PrivateRoute>}
+      />
+      <Route
         path={ROUTES.STUDENT_DASHBOARD}
         element={<PrivateRoute allowedRoles={["student"]}><StudentDashboardPage /></PrivateRoute>}
+      />
+      <Route
+        path={ROUTES.STUDENT_RESULTS}
+        element={<PrivateRoute allowedRoles={["student"]}><StudentResultsPage /></PrivateRoute>}
+      />
+      <Route
+        path={ROUTES.STUDENT_TIMETABLE}
+        element={<PrivateRoute allowedRoles={["student"]}><TimetablePage /></PrivateRoute>}
       />
       <Route
         path={ROUTES.LECTURER_DASHBOARD}

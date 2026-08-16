@@ -1,8 +1,21 @@
 from beanie import Document
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+
+DEFAULT_TENANT_FEATURES = {
+    "admissions": True,
+    "finance": True,
+    "academic": True,
+    "exam": True,
+    "accommodation": True,
+    "library": True,
+    "hr": True,
+    "health": True,
+    "research": True,
+    "alumni": True,
+}
 
 class SubscriptionTierEnum(str, Enum):
     STARTER = "starter"
@@ -33,18 +46,12 @@ class Tenant(Document):
     country: str = "Ghana"
     timezone: str = "Africa/Accra"
 
-    features: dict = {
-        "admissions": True,
-        "finance": True,
-        "academic": True,
-        "exam": True,
-        "accommodation": True,
-        "library": True,
-        "hr": True,
-        "health": True,
-        "research": True,
-        "alumni": True,
-    }
+    features: dict = Field(default_factory=lambda: DEFAULT_TENANT_FEATURES.copy())
+
+    @field_validator("features", mode="before")
+    @classmethod
+    def normalize_features(cls, value):
+        return DEFAULT_TENANT_FEATURES.copy() if value is None else value
 
     identifier_formats: dict = Field(default_factory=lambda: {
         "student_id": "{SCHOOL_CODE}-{YEAR}-{SEQUENCE}",

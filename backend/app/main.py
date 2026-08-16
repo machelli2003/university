@@ -6,7 +6,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from app.config import get_settings
 from app.infrastructure.database.connection import init_db, close_db
-from app.infrastructure.middleware.authorization_middleware import TenantIsolationMiddleware
 from app.infrastructure.middleware.rate_limit import RateLimitMiddleware
 from app.infrastructure.middleware.distributed_rate_limit import (
     DistributedRateLimitMiddleware, SessionCleanupMiddleware
@@ -15,64 +14,81 @@ from app.exceptions import DomainException, domain_exception_handler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
-class AuditMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+class AuditMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
         request_id = str(uuid.uuid4())
-        request.state.request_id = request_id
+        
+        # Buffer body without blocking downstream ASGI receive
+        body_chunks = []
+        async def receive_wrapper():
+            message = await receive()
+            if message.get("type") == "http.request":
+                chunk = message.get("body", b"")
+                if chunk:
+                    body_chunks.append(chunk)
+            return message
 
-        # Safely read body and reset receive stream so downstream handlers receive body
+        async def send_wrapper(message):
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode("utf-8")))
+                message["headers"] = headers
+            await send(message)
+
         try:
-            body_bytes = await request.body()
-            async def receive():
-                return {"type": "http.request", "body": body_bytes}
-            request._receive = receive
-        except Exception:
-            body_bytes = b""
+            await self.app(scope, receive_wrapper, send_wrapper)
+        finally:
+            path = scope.get("path", "")
+            method = scope.get("method", "")
+            client = scope.get("client")
+            client_host = client[0] if client else "unknown"
+            logging.getLogger("audit").info(
+                f"{request_id} {method} {path} from {client_host}"
+            )
 
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-
-        client_host = request.client.host if request.client else None
-        logging.getLogger("audit").info(
-            f"{request_id} {request.method} {request.url.path} from {client_host or 'unknown'}"
-        )
-
-        # Persist audit record asynchronously without blocking HTTP response
-        async def _save_audit():
-            try:
-                from app.infrastructure.database.repositories.audit_repository import AuditRepository
-                import json
-
-                repo = AuditRepository()
-                details = {
-                    "method": request.method,
-                    "path": request.url.path,
-                    "query": dict(request.query_params),
-                }
-                if body_bytes:
+            # Persist audit record asynchronously without blocking HTTP response
+            if path not in ["/health", "/docs", "/openapi.json", "/redoc"]:
+                body_bytes = b"".join(body_chunks)
+                async def _save_audit():
                     try:
-                        details["body"] = json.loads(body_bytes.decode("utf-8"))
+                        from app.infrastructure.database.repositories.audit_repository import AuditRepository
+                        import json
+
+                        repo = AuditRepository()
+                        details = {
+                            "method": method,
+                            "path": path,
+                            "query": scope.get("query_string", b"").decode("utf-8", errors="replace"),
+                        }
+                        if body_bytes and not path.startswith("/api/v1/auth"):
+                            try:
+                                details["body"] = json.loads(body_bytes.decode("utf-8"))
+                            except Exception:
+                                details["body"] = body_bytes.decode("utf-8", errors="replace")[:2000]
+
+                        await repo.create({
+                            "event_type": "http_request",
+                            "entity_type": "request",
+                            "entity_id": request_id,
+                            "action": f"{method} {path}",
+                            "details": details,
+                            "ip_address": client_host,
+                            "request_id": request_id,
+                        })
                     except Exception:
-                        details["body"] = body_bytes.decode("utf-8", errors="replace")[:2000]
+                        logging.getLogger("audit").exception("Failed to persist audit log")
 
-                await repo.create({
-                    "tenant_id": getattr(request.state, "tenant_id", None),
-                    "event_type": "http_request",
-                    "entity_type": "request",
-                    "entity_id": request_id,
-                    "action": f"{request.method} {request.url.path}",
-                    "performed_by": getattr(request.state, "user_id", None),
-                    "details": details,
-                    "ip_address": client_host,
-                    "request_id": request_id,
-                })
-            except Exception:
-                logging.getLogger("audit").exception("Failed to persist audit log")
-
-        import asyncio
-        asyncio.create_task(_save_audit())
-
-        return response
+                import asyncio
+                try:
+                    asyncio.create_task(_save_audit())
+                except RuntimeError:
+                    pass
 
 from app.presentation.api.v1.auth import routes as auth_routes
 from app.presentation.api.v1.admissions import routes as admissions_routes
@@ -102,6 +118,7 @@ from app.presentation.api.v1.attendance import routes as attendance_routes
 from app.presentation.api.v1.parents import routes as parents_routes
 from app.presentation.api.v1.counseling import routes as counseling_routes
 from app.presentation.api.v1.applicant_portal import routes as applicant_portal_routes
+from app.presentation.api.v1.applicant_portal import application_form_routes as application_form_routes
 from app.presentation.api.v1.admissions import wassce_verification_routes as wassce_verification
 from app.presentation.api.v1.staff import staff_assignment_routes as staff_assignment_routes
 from app.presentation.api.v1.dashboards import admissions_officer_dashboard as admissions_officer_dashboard
@@ -138,7 +155,6 @@ app.add_middleware(
 )
 
 app.add_middleware(AuditMiddleware)
-app.add_middleware(TenantIsolationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(DistributedRateLimitMiddleware)  # Item 75: Distributed rate limiting
 app.add_middleware(SessionCleanupMiddleware)  # Item 75: Session cleanup
@@ -180,6 +196,7 @@ app.include_router(attendance_routes.router, prefix="/api/v1/attendance", tags=[
 app.include_router(parents_routes.router, prefix="/api/v1", tags=["parents"])
 app.include_router(counseling_routes.router, prefix="/api/v1", tags=["counseling"])
 app.include_router(applicant_portal_routes.router, prefix="/api/v1", tags=["applicant-portal"])
+app.include_router(application_form_routes.router, prefix="/api/v1/application-form", tags=["application-form"])
 app.include_router(wassce_verification.router, prefix="/api/v1", tags=["wassce-verification"])
 app.include_router(staff_assignment_routes.router, tags=["staff-assignments"])
 app.include_router(admissions_officer_dashboard.router, prefix="/api/v1", tags=["dashboards"])
@@ -210,3 +227,5 @@ async def api_health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+
+# Reload triggered for onboarding permission changes.

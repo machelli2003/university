@@ -16,27 +16,52 @@ class BaseRepository(Generic[T]):
         return document
 
     async def get_by_id(self, doc_id: str) -> Optional[T]:
-        return await self.model.get(doc_id)
+        try:
+            return await self.model.get(doc_id)
+        except Exception:
+            return None
 
     async def get_one(self, **kwargs) -> Optional[T]:
         return await self.model.find_one(kwargs)
+
+    async def find_one(self, query: Optional[Dict[str, Any]] = None, **kwargs) -> Optional[T]:
+        if query and isinstance(query, dict):
+            if kwargs:
+                merged = {**query, **kwargs}
+                return await self.model.find_one(merged)
+            return await self.model.find_one(query)
+        return await self.model.find_one(kwargs)
+
+    def find(self, query: Optional[Dict[str, Any]] = None, **kwargs):
+        if query and isinstance(query, dict):
+            if kwargs:
+                merged = {**query, **kwargs}
+                return self.model.find(merged)
+            return self.model.find(query)
+        return self.model.find(kwargs)
 
     async def get_all(self, **kwargs) -> List[T]:
         return await self.model.find(kwargs).to_list(None)
 
     async def update(self, doc_id: str, data: Dict[str, Any]) -> Optional[T]:
-        doc = await self.model.get(doc_id)
-        if not doc:
+        try:
+            doc = await self.model.get(doc_id)
+            if not doc:
+                return None
+            await doc.update({"$set": data})
+            return await self.model.get(doc_id)
+        except Exception:
             return None
-        await doc.update({"$set": data})
-        return await self.model.get(doc_id)
 
     async def delete(self, doc_id: str) -> bool:
-        doc = await self.model.get(doc_id)
-        if not doc:
+        try:
+            doc = await self.model.get(doc_id)
+            if not doc:
+                return False
+            await doc.delete()
+            return True
+        except Exception:
             return False
-        await doc.delete()
-        return True
 
     async def count(self, **kwargs) -> int:
         return await self.model.find(kwargs).count()

@@ -67,9 +67,49 @@ apiClient.interceptors.response.use(
   }
 )
 
+function extractValidationMessage(value: unknown): string {
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    return value.map(extractValidationMessage).filter(Boolean).join(" • ")
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>
+    if (typeof obj.msg === "string") return obj.msg
+    if (typeof obj.message === "string") return obj.message
+    if (typeof obj.error === "string") return obj.error
+    if (Array.isArray(obj.errors)) {
+      return obj.errors.map(extractValidationMessage).filter(Boolean).join(" • ")
+    }
+  }
+  return ""
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return (error.response?.data as any)?.detail || error.message || "Something went wrong"
+    const data = error.response?.data as any
+
+    if (typeof data === "string") return data
+    if (data && typeof data === "object") {
+      if (typeof data.detail === "string") return data.detail
+      if (Array.isArray(data.detail)) {
+        const msg = data.detail.map(extractValidationMessage).filter(Boolean).join(" • ")
+        if (msg) return msg
+      }
+      if (typeof data.message === "string") return data.message
+      if (Array.isArray(data)) {
+        const msg = data.map(extractValidationMessage).filter(Boolean).join(" • ")
+        if (msg) return msg
+      }
+    }
+
+    return error.message || "Something went wrong"
   }
+
+  if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>
+    if (typeof e.message === "string") return e.message
+    if (typeof e.detail === "string") return e.detail
+  }
+
   return "Something went wrong"
 }

@@ -17,100 +17,40 @@ from typing import Optional
 
 class TenantIsolationMiddleware(BaseHTTPMiddleware):
     """
-    Middleware to enforce tenant isolation on all database queries.
-    
-    Validates that:
-    1. Every protected endpoint has a current user with tenant_id
-    2. All database queries are scoped to user's tenant
-    3. Cross-tenant access attempts are blocked
-    4. Audit logs include tenant_id
+    Compatibility middleware for single-university deployments.
+
+    It no longer enforces tenant-scoped access. The app is configured to run as a
+    single institution, so request validation focuses on authorization rather than
+    cross-tenant isolation.
     """
-    
-    # Public endpoints that don't require authentication
+
     PUBLIC_PATHS = [
-        "/apply/",  # Applicant portal landing pages (no auth needed)
+        "/apply/",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/auth/refresh",
+        "/api/v1/auth/reset-password",
         "/api/v1/health",
         "/health",
-        "/docs",  # Swagger docs
-        "/openapi.json",  # OpenAPI schema
-        "/redoc",  # ReDoc docs
+        "/docs",
+        "/openapi.json",
+        "/redoc",
     ]
-    
+
     async def dispatch(self, request: Request, call_next):
-        """
-        Intercept request, validate tenant context, pass to handler.
-        In test mode, allows X-User-ID and X-Tenant-ID headers.
-        In production, requires valid JWT Authorization header.
-        """
-        # Check if path is public
-        is_public = any(
-            request.url.path.startswith(path) for path in self.PUBLIC_PATHS
-        )
-        
+        is_public = any(request.url.path.startswith(path) for path in self.PUBLIC_PATHS)
         if is_public:
-            # Public endpoint - no tenant check needed
             return await call_next(request)
-        
-        # Protected endpoint - validate tenant context
-        try:
-            # Get current user from headers (set by tests or get_current_user dependency)
-            user_id = request.headers.get("X-User-ID")
-            tenant_id = request.headers.get("X-Tenant-ID")
-            
-            # Check for Authorization header (JWT token)
-            auth_header = request.headers.get("Authorization", "")
-            has_auth_header = auth_header.startswith("Bearer ")
-            
-            # If in test mode, allow X-User-ID and X-Tenant-ID headers
-            is_testing = os.getenv("TESTING") == "true" or os.getenv("ENVIRONMENT") == "test"
-            
-            if not (user_id and tenant_id):
-                # If not testing and no headers, require JWT Authorization header
-                if not is_testing:
-                    if not has_auth_header:
-                        raise HTTPException(
-                            status_code=401,
-                            detail="Missing or invalid Authorization header"
-                        )
-                # JWT parsing happens in get_current_user dependency
-                # Headers will be set when dependency injects current user
-                
-                # In test mode, still require either headers or JWT
-                if is_testing and not has_auth_header:
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Missing or invalid Authorization header"
-                    )
-            
-            # Store in request state for access in endpoint handlers
-            if user_id:
-                request.state.user_id = user_id
-            if tenant_id:
-                request.state.tenant_id = tenant_id
-            
-            # Call next middleware/endpoint
-            response = await call_next(request)
-            
-            # Add security headers (only in non-test mode)
-            if not is_testing:
-                response.headers["X-Content-Type-Options"] = "nosniff"
-                response.headers["X-Frame-Options"] = "DENY"
-                response.headers["X-XSS-Protection"] = "1; mode=block"
-            
-            return response
-            
-        except HTTPException:
-            # Re-raise HTTPException as-is
-            raise
-        except Exception as e:
-            # Wrap other exceptions
-            raise HTTPException(
-                status_code=403,
-                detail=f"Tenant isolation validation failed: {str(e)}"
-            )
+
+        user_id = request.headers.get("X-User-ID")
+        if user_id:
+            request.state.user_id = user_id
+
+        tenant_id = request.headers.get("X-Tenant-ID")
+        if tenant_id:
+            request.state.tenant_id = tenant_id
+
+        return await call_next(request)
 
 
 class AuthorizationService:

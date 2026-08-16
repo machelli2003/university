@@ -19,6 +19,16 @@ client: AsyncIOMotorClient = None
 db = None
 
 import asyncio
+import dns.resolver
+
+# Ensure robust DNS SRV record resolution for MongoDB Atlas
+try:
+    resolver = dns.resolver.Resolver(configure=True)
+    resolver.lifetime = 5.0
+    resolver.timeout = 5.0
+    dns.resolver.default_resolver = resolver
+except Exception:
+    pass
 
 async def init_db():
     global client, db

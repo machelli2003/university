@@ -9,7 +9,15 @@ class UniversityApplicationRepository(BaseRepository[UniversityApplication]):
         super().__init__(UniversityApplication)
 
     async def get_by_application_id(self, application_id: str) -> Optional[UniversityApplication]:
-        return await self.model.find_one({"university_application_id": application_id})
+        app = await self.model.find_one({"university_application_id": application_id})
+        if not app:
+            try:
+                from bson import ObjectId
+                if ObjectId.is_valid(application_id):
+                    app = await self.model.get(application_id)
+            except Exception:
+                pass
+        return app
 
     async def get_by_school_code(self, school_code: str) -> Optional[UniversityApplication]:
         return await self.model.find_one({"school_code": school_code})
@@ -44,7 +52,6 @@ class IdentifierSequenceRepository(BaseRepository[IdentifierSequence]):
                 "tenant_id": tenant_id,
                 "sequence_type": sequence_type,
                 "year": year,
-                "updated_at": datetime.utcnow(),
             },
             "$set": {"updated_at": datetime.utcnow()},
         }

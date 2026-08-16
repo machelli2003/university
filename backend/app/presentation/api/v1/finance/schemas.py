@@ -1,8 +1,8 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-from app.infrastructure.models.tenant import SubscriptionTierEnum
+from app.infrastructure.models.tenant import SubscriptionTierEnum, DEFAULT_TENANT_FEATURES
 
 class InitiatePaymentRequest(BaseModel):
     student_id: str
@@ -118,6 +118,11 @@ class TenantResponse(BaseModel):
     is_trial: bool
     features: Dict[str, bool]
 
+    @field_validator("features", mode="before")
+    @classmethod
+    def normalize_features(cls, value):
+        return DEFAULT_TENANT_FEATURES.copy() if value is None else value
+
 class TenantCreateRequest(BaseModel):
     name: str
     subdomain: str
@@ -132,7 +137,12 @@ class TenantCreateRequest(BaseModel):
     secondary_color: Optional[str] = "#8b5cf6"
     accent_color: Optional[str] = "#ec4899"
     subscription_tier: Optional[SubscriptionTierEnum] = SubscriptionTierEnum.STARTER
-    features: Optional[Dict[str, bool]] = None
+    features: Dict[str, bool] = Field(default_factory=lambda: DEFAULT_TENANT_FEATURES.copy())
+
+    @field_validator("features", mode="before")
+    @classmethod
+    def normalize_features(cls, value):
+        return DEFAULT_TENANT_FEATURES.copy() if value is None else value
 
 class TenantUpdateRequest(BaseModel):
     name: Optional[str] = None

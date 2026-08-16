@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, Dict, List, Any
 from enum import Enum
 
@@ -40,6 +40,13 @@ class CreateUniversityApplicationRequest(BaseModel):
     academic_calendar_type: Optional[str] = None
     timezone: Optional[str] = None
     currency: Optional[str] = None
+
+    @field_validator("display_name", "location", "region", "country", "postal_address", "official_email", "official_phone", "website", "logo_url", "favicon_url", "description", "academic_calendar_type", "timezone", "currency", mode="before")
+    @classmethod
+    def empty_to_none(cls, value):
+        if value == "":
+            return None
+        return value
 
 
 class UpdateUniversityInformationRequest(BaseModel):
@@ -487,5 +494,49 @@ class UniversityApplicationResponse(BaseModel):
     module_enablement: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def convert_objectid_to_string(cls, value):
+        if value is None:
+            return value
+        return str(value)
+
+    @field_validator(
+        "university_information",
+        "id_configuration",
+        "academic_year_configuration",
+        "faculties_configuration",
+        "departments_configuration",
+        "programmes_configuration",
+        "courses_configuration",
+        "admission_cycle_configuration",
+        "admission_categories_configuration",
+        "admission_requirements_configuration",
+        "application_form_configuration",
+        "application_fee_configuration",
+        "staff_setup_configuration",
+        "role_permission_configuration",
+        "student_id_configuration",
+        "staff_id_configuration",
+        "applicant_id_configuration",
+        "hostel_configuration",
+        "finance_configuration",
+        "library_configuration",
+        "grading_configuration",
+        "graduation_configuration",
+        "module_enablement",
+        mode="before"
+    )
+    @classmethod
+    def convert_pydantic_to_dict(cls, value):
+        """Convert Pydantic model instances to dicts"""
+        if value is None:
+            return value
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        if hasattr(value, "dict"):
+            return value.dict()
+        return value
 
     model_config = {"from_attributes": True}
