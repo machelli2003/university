@@ -91,12 +91,11 @@ async def get_admissions_officer_dashboard(
     """
     
     # Verify user role
-    if current_user.get("role") != "admissions_officer":
+    user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if user_role not in ["admissions_officer", "university_admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Only admissions officers can access this")
     
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
+    tenant_id = str(getattr(current_user, "tenant_id", "single-university") or "single-university")
     
     try:
         # Get all applications for this tenant

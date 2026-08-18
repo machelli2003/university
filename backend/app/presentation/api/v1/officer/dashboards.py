@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/officer/dashboard/hostel")
 async def get_hostel_dashboard(
-    current_user: User = Depends(require_roles("hostel_admin", "super_admin")),
+    current_user: User = Depends(require_roles("hostel_administrator", "hostel_admin", "university_admin", "super_admin")),
 ):
     """
     Item 47: Hostel Admin Dashboard
@@ -26,45 +26,34 @@ async def get_hostel_dashboard(
     tenant_id = str(current_user.tenant_id)
     
     return {
-        "hostel_summary": {
-            "total_halls": 5,
-            "total_rooms": 150,
-            "total_beds": 450,
-            "occupied_beds": 387,
-            "occupancy_rate": 86,
-            "vacancy": 63,
-        },
-        "recent_allocations": [
-            {
-                "allocation_id": f"ALLOC-{i:04d}",
-                "student_id": f"STU-2024-{i:04d}",
-                "hall": f"Hall {chr(65+i%4)}",
-                "room": f"{i:03d}",
-                "bed": f"Bed {i%4+1}",
-                "status": "active",
-                "allocated_date": datetime.utcnow().isoformat(),
-            }
-            for i in range(1, 11)
+        "total_hostels": 4,
+        "total_beds": 400,
+        "occupied_beds": 340,
+        "occupancy_rate": 85.0,
+        "pending_requests": 12,
+        "pending_maintenance": 5,
+        "hostels": [
+            {"hostel_id": "h-01", "hostel_name": "Nelson Mandela Hall", "total_beds": 100, "occupied_beds": 95},
+            {"hostel_id": "h-02", "hostel_name": "Kwame Nkrumah Hall", "total_beds": 100, "occupied_beds": 82},
+            {"hostel_id": "h-03", "hostel_name": "Kofi Annan Hall", "total_beds": 100, "occupied_beds": 88},
+            {"hostel_id": "h-04", "hostel_name": "W.E.B. DuBois Hall", "total_beds": 100, "occupied_beds": 75},
         ],
         "maintenance_requests": [
-            {
-                "request_id": f"MAINT-{i:04d}",
-                "hall": f"Hall {chr(65+i%4)}",
-                "issue": ["Burst pipe", "Leaking ceiling", "Broken window", "Faulty lock"][i % 4],
-                "status": ["pending", "in_progress", "completed"][i % 3],
-                "reported_date": (datetime.utcnow().timestamp() - i*86400),
-            }
-            for i in range(1, 6)
+            {"request_id": "MAINT-001", "hostel_name": "Nelson Mandela Hall", "issue": "Plumbing repair in Block A", "status": "pending", "submitted_date": "2026-08-15"},
+            {"request_id": "MAINT-002", "hostel_name": "Kwame Nkrumah Hall", "issue": "Electrical socket replacement", "status": "in-progress", "submitted_date": "2026-08-16"},
+            {"request_id": "MAINT-003", "hostel_name": "Kofi Annan Hall", "issue": "AC maintenance in room 204", "status": "completed", "submitted_date": "2026-08-14"},
         ],
-        "hall_capacity": [
-            {"hall": f"Hall {chr(65+i)}", "capacity": 30, "occupied": int(30*0.85)} for i in range(5)
-        ],
+        "bed_requests": [
+            {"request_id": "REQ-001", "student_name": "Kofi Mensah", "hostel_preference": "Nelson Mandela Hall", "status": "pending"},
+            {"request_id": "REQ-002", "student_name": "Ama Serwaa", "hostel_preference": "Kwame Nkrumah Hall", "status": "approved"},
+            {"request_id": "REQ-003", "student_name": "Kwaku Addo", "hostel_preference": "Kofi Annan Hall", "status": "rejected"},
+        ]
     }
 
 
 @router.get("/officer/dashboard/hostel/export")
 async def export_hostel_report(
-    current_user: User = Depends(require_roles("hostel_admin", "super_admin")),
+    current_user: User = Depends(require_roles("hostel_administrator", "hostel_admin", "university_admin", "super_admin")),
     format: str = Query("json", regex="^(csv|json)$"),
 ):
     """Export hostel occupancy report."""
@@ -79,7 +68,7 @@ async def export_hostel_report(
 
 @router.get("/officer/dashboard/library")
 async def get_library_dashboard(
-    current_user: User = Depends(require_roles("librarian", "super_admin")),
+    current_user: User = Depends(require_roles("librarian", "university_admin", "super_admin")),
 ):
     """
     Item 48: Library Dashboard
@@ -88,45 +77,25 @@ async def get_library_dashboard(
     tenant_id = str(current_user.tenant_id)
     
     return {
-        "inventory_summary": {
-            "total_books": 15000,
-            "available": 8500,
-            "checked_out": 5200,
-            "damaged": 800,
-            "lost": 500,
-        },
-        "circulation": {
-            "books_issued_today": 45,
-            "books_returned_today": 38,
-            "overdue_items": 342,
-            "fines_collected_month": 2850.50,
-        },
-        "top_borrowed_books": [
-            {
-                "book_id": f"BOOK-{i:04d}",
-                "title": f"Introduction to {['Python', 'Data Science', 'Web Dev', 'AI', 'Cloud'][i%5]}",
-                "author": f"Author {i}",
-                "times_borrowed": 145 - i*20,
-            }
-            for i in range(1, 6)
-        ],
+        "total_books": 15000,
+        "available_books": 11200,
+        "checked_out_books": 3800,
+        "overdue_books": 45,
+        "total_members": 2500,
         "recent_checkouts": [
-            {
-                "checkout_id": f"CHK-{i:04d}",
-                "member_id": f"MEM-{i:04d}",
-                "book_title": f"Book {i}",
-                "due_date": (datetime.utcnow().timestamp() + 14*86400),
-            }
-            for i in range(1, 11)
+            {"checkout_id": "CHK-001", "member_name": "Yaw Boateng", "book_title": "Introduction to Computer Science", "checkout_date": "2026-08-01", "due_date": "2026-08-15", "status": "active"},
+            {"checkout_id": "CHK-002", "member_name": "Akosua Prempeh", "book_title": "Principles of Macroeconomics", "checkout_date": "2026-07-20", "due_date": "2026-08-03", "status": "overdue"},
         ],
-        "members_active": 2500,
-        "membership_renewals_pending": 145,
+        "top_books": [
+            {"book_id": "BK-001", "title": "Data Structures & Algorithms in Python", "isbn": "978-0134853987", "total_copies": 25, "available_copies": 5},
+            {"book_id": "BK-002", "title": "Calculus: Early Transcendentals", "isbn": "978-1337613927", "total_copies": 30, "available_copies": 12},
+        ]
     }
 
 
 @router.get("/officer/dashboard/library/export")
 async def export_library_report(
-    current_user: User = Depends(require_roles("librarian", "super_admin")),
+    current_user: User = Depends(require_roles("librarian", "university_admin", "super_admin")),
     format: str = Query("json", regex="^(csv|json)$"),
 ):
     """Export library inventory report."""
@@ -140,7 +109,7 @@ async def export_library_report(
 
 @router.get("/officer/dashboard/alumni")
 async def get_alumni_dashboard(
-    current_user: User = Depends(require_roles("alumni_officer", "super_admin")),
+    current_user: User = Depends(require_roles("alumni_officer", "alumni", "university_admin", "super_admin")),
 ):
     """
     Item 51: Alumni Dashboard
@@ -149,45 +118,29 @@ async def get_alumni_dashboard(
     tenant_id = str(current_user.tenant_id)
     
     return {
-        "alumni_statistics": {
-            "total_alumni": 12500,
-            "active_members": 6800,
-            "last_month_logins": 2340,
-            "verified_profiles": 8900,
-            "pending_verification": 3600,
-        },
-        "engagement": {
-            "events_this_month": 5,
-            "event_attendees_avg": 85,
-            "forum_posts_week": 234,
-            "job_postings": 42,
-            "connection_requests": 156,
-        },
-        "recent_alumni": [
-            {
-                "alumni_id": f"ALUM-{i:04d}",
-                "name": f"Graduate {i}",
-                "graduation_year": 2024 - (i % 5),
-                "current_company": ["Google", "Microsoft", "Apple", "Amazon", "Meta"][i % 5],
-                "joined_date": (datetime.utcnow().timestamp() - i*2592000),
-            }
-            for i in range(1, 11)
+        "total_alumni": 12500,
+        "active_members": 6800,
+        "upcoming_events": 4,
+        "job_postings": 25,
+        "alumni_members": [
+            {"member_id": "ALUM-001", "name": "Kwame Osei", "graduation_year": 2022, "employment_status": "Employed at Google"},
+            {"member_id": "ALUM-002", "name": "Abena Mensah", "graduation_year": 2023, "employment_status": "Employed at Microsoft"},
+            {"member_id": "ALUM-003", "name": "Kojo Owusu", "graduation_year": 2021, "employment_status": "Founder at TechHub"},
         ],
-        "upcoming_events": [
-            {
-                "event_id": f"EVENT-{i:03d}",
-                "title": f"Alumni Networking {i}",
-                "date": (datetime.utcnow().timestamp() + i*604800),
-                "registered": 50 + i*10,
-            }
-            for i in range(1, 4)
+        "events": [
+            {"event_id": "EVT-001", "event_name": "Annual Alumni Gala", "event_date": "2026-09-15", "attendance": 150},
+            {"event_id": "EVT-002", "event_name": "Tech Mentorship Webinar", "event_date": "2026-10-01", "attendance": 85},
         ],
+        "job_postings_list": [
+            {"posting_id": "JOB-001", "job_title": "Senior Frontend Developer", "company": "Hubtel", "posted_date": "2026-08-10"},
+            {"posting_id": "JOB-002", "job_title": "Data Analyst", "company": "MTN Ghana", "posted_date": "2026-08-12"},
+        ]
     }
 
 
 @router.get("/officer/dashboard/alumni/export")
 async def export_alumni_report(
-    current_user: User = Depends(require_roles("alumni_officer", "super_admin")),
+    current_user: User = Depends(require_roles("alumni_officer", "alumni", "university_admin", "super_admin")),
     format: str = Query("json", regex="^(csv|json)$"),
 ):
     """Export alumni engagement report."""
@@ -201,8 +154,10 @@ async def export_alumni_report(
 # ==================== ITEM 52: TENANT ADMIN DASHBOARD ====================
 
 @router.get("/admin/dashboard/tenant")
+@router.get("/officer/dashboard/tenant_admin")
+@router.get("/officer/dashboard/tenant-admin")
 async def get_tenant_admin_dashboard(
-    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    current_user: User = Depends(require_roles("university_admin", "tenant_admin", "super_admin")),
 ):
     """
     Item 52: Tenant Admin Dashboard
@@ -211,56 +166,26 @@ async def get_tenant_admin_dashboard(
     tenant_id = str(current_user.tenant_id)
     
     return {
-        "university_health": {
-            "status": "active",
-            "setup_complete": True,
-            "setup_percentage": 100,
-            "active_users": 2850,
-            "active_students": 1200,
-            "active_staff": 350,
-            "new_applicants_week": 156,
-        },
-        "academic_status": {
-            "active_programmes": 24,
-            "active_courses": 186,
-            "departments": 6,
-            "faculties": 3,
-            "current_admission_cycle": "2024/2025",
-            "admissions_open": True,
-        },
-        "financial_overview": {
-            "revenue_this_month": 450000,
-            "outstanding_fees": 125000,
-            "payment_success_rate": 92.5,
-            "pending_payments": 45,
-        },
-        "recent_activities": [
-            {
-                "activity_id": f"ACT-{i:04d}",
-                "type": ["application_submitted", "payment_confirmed", "student_enrolled", "staff_created"][i % 4],
-                "description": f"Activity {i}",
-                "timestamp": (datetime.utcnow().timestamp() - i*3600),
-            }
-            for i in range(1, 11)
+        "total_users": 450,
+        "active_users": 420,
+        "system_health": 99.5,
+        "pending_approvals": 6,
+        "data_usage_gb": 85.3,
+        "users": [
+            {"user_id": "USR-001", "name": "Dr. Emmanuel Mensah", "email": "e.mensah@university.edu", "role": "head_of_department", "status": "active"},
+            {"user_id": "USR-002", "name": "Prof. Sarah Adjei", "email": "s.adjei@university.edu", "role": "dean", "status": "active"},
+            {"user_id": "USR-003", "name": "Grace Quaye", "email": "g.quaye@university.edu", "role": "finance_officer", "status": "active"},
         ],
-        "system_alerts": [
-            {"alert_id": f"ALT-{i:03d}", "level": ["info", "warning", "critical"][i % 3], "message": f"Alert {i}"}
-            for i in range(1, 4)
-        ],
-        "module_status": {
-            "admissions": "enabled",
-            "finance": "enabled",
-            "academics": "enabled",
-            "accommodation": "enabled",
-            "library": "enabled",
-            "alumni": "enabled",
-        },
+        "pending_requests": [
+            {"approval_id": "APP-001", "request_type": "Course Syllabus Update", "requester_name": "Dr. Emmanuel Mensah", "submitted_date": "2026-08-14"},
+            {"approval_id": "APP-002", "request_type": "New Staff Account", "requester_name": "HR Department", "submitted_date": "2026-08-15"},
+        ]
     }
 
 
 @router.get("/admin/dashboard/tenant/export")
 async def export_tenant_report(
-    current_user: User = Depends(require_roles("university_admin", "super_admin")),
+    current_user: User = Depends(require_roles("university_admin", "tenant_admin", "super_admin")),
     format: str = Query("json", regex="^(csv|json)$"),
 ):
     """Export comprehensive university report."""
@@ -269,3 +194,4 @@ async def export_tenant_report(
         "university_name": "University Name",
         "report_format": format,
     }
+

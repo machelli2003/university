@@ -55,6 +55,22 @@ class UpdateAssignmentRequest(BaseModel):
     end_date: datetime | None = None
 
 
+def _get_role(user) -> str:
+    if isinstance(user, dict):
+        return user.get("role", "")
+    return user.role.value if hasattr(user.role, "value") else str(getattr(user, "role", ""))
+
+def _get_tenant_id(user) -> str:
+    if isinstance(user, dict):
+        return user.get("tenant_id", "single-university")
+    return str(getattr(user, "tenant_id", "single-university") or "single-university")
+
+def _get_user_id(user) -> str:
+    if isinstance(user, dict):
+        return str(user.get("user_id") or user.get("id") or "")
+    return str(getattr(user, "id", ""))
+
+
 # Routes
 @router.post("", response_model=AssignmentResponse, status_code=201)
 async def create_assignment(
@@ -66,10 +82,10 @@ async def create_assignment(
     Only super_admin and university_admin can create assignments
     """
     # Authorization check
-    if current_user.get("role") not in ["super_admin", "university_admin"]:
+    if _get_role(current_user) not in ["super_admin", "university_admin"]:
         raise HTTPException(status_code=403, detail="Unauthorized: Only admins can create assignments")
 
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignment = StaffAssignment(
         tenant_id=tenant_id,
@@ -82,7 +98,7 @@ async def create_assignment(
         start_date=request.start_date,
         end_date=request.end_date,
         is_active=True,
-        assigned_by=current_user.get("user_id"),
+        assigned_by=_get_user_id(current_user),
         assigned_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -110,7 +126,7 @@ async def get_assignment(
     current_user = Depends(get_current_user)
 ) -> AssignmentResponse:
     """Get assignment by ID"""
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignment = await StaffAssignmentRepository.get_by_id(PydanticObjectId(assignment_id))
     
@@ -138,7 +154,7 @@ async def get_staff_assignments(
     current_user = Depends(get_current_user)
 ) -> List[AssignmentResponse]:
     """Get all assignments for a staff member"""
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignments = await StaffAssignmentRepository.get_by_staff_id(tenant_id, staff_id)
     
@@ -167,7 +183,7 @@ async def list_assignments(
     current_user = Depends(get_current_user)
 ) -> List[AssignmentResponse]:
     """List all assignments for current tenant"""
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignments = await StaffAssignmentRepository.list_by_tenant(tenant_id, skip, limit)
     
@@ -200,10 +216,10 @@ async def update_assignment(
     Only super_admin and university_admin can update assignments
     """
     # Authorization check
-    if current_user.get("role") not in ["super_admin", "university_admin"]:
+    if _get_role(current_user) not in ["super_admin", "university_admin"]:
         raise HTTPException(status_code=403, detail="Unauthorized: Only admins can update assignments")
 
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignment = await StaffAssignmentRepository.get_by_id(PydanticObjectId(assignment_id))
     
@@ -250,10 +266,10 @@ async def delete_assignment(
     Only super_admin and university_admin can delete assignments
     """
     # Authorization check
-    if current_user.get("role") not in ["super_admin", "university_admin"]:
+    if _get_role(current_user) not in ["super_admin", "university_admin"]:
         raise HTTPException(status_code=403, detail="Unauthorized: Only admins can delete assignments")
 
-    tenant_id = current_user.get("tenant_id")
+    tenant_id = _get_tenant_id(current_user)
     
     assignment = await StaffAssignmentRepository.get_by_id(PydanticObjectId(assignment_id))
     

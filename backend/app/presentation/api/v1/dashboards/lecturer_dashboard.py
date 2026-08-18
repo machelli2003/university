@@ -66,12 +66,11 @@ async def get_lecturer_dashboard(current_user = Depends(get_current_user)):
     Shows courses, students, attendance, grades
     """
     
-    if current_user.get("role") not in ["lecturer", "head_of_department", "dean"]:
+    user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if user_role not in ["lecturer", "head_of_department", "dean", "university_admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Only lecturers can access this")
     
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
+    tenant_id = str(getattr(current_user, "tenant_id", "single-university") or "single-university")
     
     try:
         # Placeholder data - in production, query actual course/grade data

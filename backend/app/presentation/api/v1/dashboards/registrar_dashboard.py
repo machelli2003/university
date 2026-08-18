@@ -114,12 +114,11 @@ async def get_registrar_dashboard(
     """
     
     # Verify user role
-    if current_user.get("role") != "registrar":
+    user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if user_role not in ["registrar", "university_admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Only registrars can access this")
     
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
+    tenant_id = str(getattr(current_user, "tenant_id", "single-university") or "single-university")
     
     try:
         # Initialize services
