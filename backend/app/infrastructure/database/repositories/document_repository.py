@@ -26,7 +26,7 @@ class DocumentRepository(BaseRepository[Document]):
             filters["uploaded_by"] = uploaded_by
         if signed is not None:
             filters["is_signed"] = signed
-        return await self.model.find(filters).sort("uploaded_at", -1).to_list(None)
+        return await self.model.find(filters).sort([("uploaded_at", -1)]).to_list(None)
 
 class DigitalSignatureRepository(BaseRepository[DigitalSignature]):
     def __init__(self):

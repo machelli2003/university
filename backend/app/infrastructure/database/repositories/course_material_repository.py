@@ -10,4 +10,4 @@ class CourseMaterialRepository(BaseRepository[CourseMaterial]):
         return await self.model.find({
             "tenant_id": tenant_id,
             "course_id": course_id,
-        }).sort("uploaded_at", -1).to_list(None)
+        }).sort([("uploaded_at", -1)]).to_list(None)

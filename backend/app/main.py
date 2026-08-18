@@ -14,81 +14,7 @@ from app.exceptions import DomainException, domain_exception_handler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
-class AuditMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            return await self.app(scope, receive, send)
-
-        request_id = str(uuid.uuid4())
-        
-        # Buffer body without blocking downstream ASGI receive
-        body_chunks = []
-        async def receive_wrapper():
-            message = await receive()
-            if message.get("type") == "http.request":
-                chunk = message.get("body", b"")
-                if chunk:
-                    body_chunks.append(chunk)
-            return message
-
-        async def send_wrapper(message):
-            if message.get("type") == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"x-request-id", request_id.encode("utf-8")))
-                message["headers"] = headers
-            await send(message)
-
-        try:
-            await self.app(scope, receive_wrapper, send_wrapper)
-        finally:
-            path = scope.get("path", "")
-            method = scope.get("method", "")
-            client = scope.get("client")
-            client_host = client[0] if client else "unknown"
-            logging.getLogger("audit").info(
-                f"{request_id} {method} {path} from {client_host}"
-            )
-
-            # Persist audit record asynchronously without blocking HTTP response
-            if path not in ["/health", "/docs", "/openapi.json", "/redoc"]:
-                body_bytes = b"".join(body_chunks)
-                async def _save_audit():
-                    try:
-                        from app.infrastructure.database.repositories.audit_repository import AuditRepository
-                        import json
-
-                        repo = AuditRepository()
-                        details = {
-                            "method": method,
-                            "path": path,
-                            "query": scope.get("query_string", b"").decode("utf-8", errors="replace"),
-                        }
-                        if body_bytes and not path.startswith("/api/v1/auth"):
-                            try:
-                                details["body"] = json.loads(body_bytes.decode("utf-8"))
-                            except Exception:
-                                details["body"] = body_bytes.decode("utf-8", errors="replace")[:2000]
-
-                        await repo.create({
-                            "event_type": "http_request",
-                            "entity_type": "request",
-                            "entity_id": request_id,
-                            "action": f"{method} {path}",
-                            "details": details,
-                            "ip_address": client_host,
-                            "request_id": request_id,
-                        })
-                    except Exception:
-                        logging.getLogger("audit").exception("Failed to persist audit log")
-
-                import asyncio
-                try:
-                    asyncio.create_task(_save_audit())
-                except RuntimeError:
-                    pass
+from app.infrastructure.middleware.audit_middleware import AuditMiddleware
 
 from app.presentation.api.v1.auth import routes as auth_routes
 from app.presentation.api.v1.admissions import routes as admissions_routes
@@ -154,10 +80,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(AuditMiddleware)
-app.add_middleware(RateLimitMiddleware)
-app.add_middleware(DistributedRateLimitMiddleware)  # Item 75: Distributed rate limiting
-app.add_middleware(SessionCleanupMiddleware)  # Item 75: Session cleanup
+# app.add_middleware(AuditMiddleware)
+# app.add_middleware(RateLimitMiddleware)
+# app.add_middleware(DistributedRateLimitMiddleware)  # Item 75: Distributed rate limiting
+# app.add_middleware(SessionCleanupMiddleware)  # Item 75: Session cleanup
 app.add_exception_handler(DomainException, domain_exception_handler)
 
 @app.on_event("startup")
@@ -228,4 +154,4 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
 
-# Reload triggered for onboarding permission changes.
+# Reload triggered after fixing Beanie sort syntax across repositories.

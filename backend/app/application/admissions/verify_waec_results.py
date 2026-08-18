@@ -76,7 +76,17 @@ class ApproveResultsUseCase:
         if not applicant:
             raise ValueError("Applicant not found")
 
-        if applicant.status not in [ApplicationStatusEnum.RESULTS_UPLOADED.value, ApplicationStatusEnum.RESULTS_UPLOADED]:
+        allowed_statuses = {
+            ApplicationStatusEnum.RESULTS_UPLOADED.value,
+            ApplicationStatusEnum.RESULTS_UPLOADED,
+            ApplicationStatusEnum.SUBMITTED.value,
+            ApplicationStatusEnum.SUBMITTED,
+            ApplicationStatusEnum.AWAITING_RESULTS.value,
+            ApplicationStatusEnum.AWAITING_RESULTS,
+            ApplicationStatusEnum.UNDER_REVIEW.value,
+            ApplicationStatusEnum.UNDER_REVIEW,
+        }
+        if applicant.status not in allowed_statuses and str(applicant.status) not in [s.value if hasattr(s, "value") else str(s) for s in allowed_statuses]:
             raise ValueError(f"Cannot approve results in status: {applicant.status}")
 
         if aggregate is None:

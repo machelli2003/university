@@ -20,23 +20,23 @@ class ApplicantRepository(BaseRepository[Applicant]):
         })
 
     async def get_by_status(self, tenant_id: str, status: str) -> List[Applicant]:
-        return await self.model.find({
-            "tenant_id": tenant_id,
-            "status": status
-        }).to_list(None)
+        query: dict = {"status": status}
+        if tenant_id and tenant_id != "default":
+            query["tenant_id"] = tenant_id
+        return await self.model.find(query).to_list(None)
 
     async def get_pending_verification(self, tenant_id: str) -> List[Applicant]:
-        return await self.model.find({
-            "tenant_id": tenant_id,
-            "status": {"$in": ["awaiting_results", "results_uploaded"]}
-        }).to_list(None)
+        query = {"status": {"$in": ["awaiting_results", "results_uploaded", "submitted", "under_review"]}}
+        if tenant_id and tenant_id != "default":
+            query["tenant_id"] = tenant_id
+        return await self.model.find(query).to_list(None)
 
     async def get_eligible_applicants(self, tenant_id: str) -> List[Applicant]:
-        return await self.model.find({
-            "tenant_id": tenant_id,
-            "is_eligible": True,
-            "status": {"$in": ["eligible", "ranked"]}
-        }).to_list(None)
+        # Trust status field — don't require is_eligible flag which may not be set
+        query: dict = {"status": {"$in": ["eligible", "ranked", "results_approved"]}}
+        if tenant_id and tenant_id != "default":
+            query["tenant_id"] = tenant_id
+        return await self.model.find(query).to_list(None)
 
     async def get_by_programme_choice(self, tenant_id: str, programme_id: str) -> List[Applicant]:
         return await self.model.find({
@@ -49,7 +49,7 @@ class ApplicantRepository(BaseRepository[Applicant]):
             "tenant_id": tenant_id,
             "programme_choices.programme_id": programme_id,
             "is_eligible": True
-        }).sort("merit_rank", 1).to_list(None)
+        }).sort([("merit_rank", 1)]).to_list(None)
         return results
 
     async def update_eligibility(self, applicant_id: str, is_eligible: bool, reason: str):

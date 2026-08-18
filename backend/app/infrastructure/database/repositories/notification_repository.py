@@ -9,7 +9,7 @@ class NotificationRepository(BaseRepository[Notification]):
     async def get_by_recipient(self, recipient_id: str) -> List[Notification]:
         return await self.model.find({
             "recipient_id": recipient_id
-        }).sort("created_at", -1).to_list(None)
+        }).sort([("created_at", -1)]).to_list(None)
 
     async def get_unread(self, recipient_id: str) -> List[Notification]:
         return await self.model.find({

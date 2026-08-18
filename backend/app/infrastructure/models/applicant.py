@@ -1,5 +1,5 @@
 from beanie import Document, Indexed
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -101,6 +101,21 @@ class Applicant(Document):
     first_name: str
     last_name: str
     date_of_birth: Optional[datetime] = None
+
+    @field_validator("date_of_birth", mode="before")
+    @classmethod
+    def parse_dob(cls, v):
+        if v == "" or v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v)
+            except ValueError:
+                try:
+                    return datetime.strptime(v, "%Y-%m-%d")
+                except ValueError:
+                    return None
+        return v
     gender: Optional[str] = None
     phone: str
     address: Optional[str] = None

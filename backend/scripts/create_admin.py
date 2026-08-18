@@ -31,7 +31,13 @@ async def create_admin(email: str, password: str, client: Optional[AsyncIOMotorC
     settings = get_settings()
     should_close = False
     if client is None:
-        client = AsyncIOMotorClient(settings.MONGODB_URL)
+        client = AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            serverSelectionTimeoutMS=10000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=20000,
+            tlsAllowInvalidCertificates=True,
+        )
         should_close = True
     db = client[settings.MONGODB_DB]
 
@@ -69,7 +75,13 @@ async def create_admin(email: str, password: str, client: Optional[AsyncIOMotorC
 
 async def run_main():
     settings = get_settings()
-    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    client = AsyncIOMotorClient(
+        settings.MONGODB_URL,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=10000,
+        socketTimeoutMS=20000,
+        tlsAllowInvalidCertificates=True,
+    )
     try:
         if len(sys.argv) == 1:
             if settings.SUPER_ADMIN_EMAIL and settings.SUPER_ADMIN_PASSWORD:

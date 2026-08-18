@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class CreateApplicantRequest(BaseModel):
@@ -41,15 +41,26 @@ class ApplicantResponse(BaseModel):
     first_name: str
     last_name: str
     phone: str
+    date_of_birth: Optional[datetime] = None
+    gender: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    region: Optional[str] = None
+    nationality: Optional[str] = None
     status: str
-    index_number: Optional[str]
-    exam_year: Optional[int]
-    results: Dict[str, str]
-    aggregate: Optional[int]
-    is_eligible: bool
-    merit_score: Optional[float]
-    merit_rank: Optional[int]
-    allocated_programme_id: Optional[str]
+    index_number: Optional[str] = None
+    exam_year: Optional[int] = None
+    exam_type: Optional[str] = None
+    results: Dict[str, Any] = {}
+    programme_choices: Optional[List[Dict[str, Any]]] = None
+    statement_of_purpose: Optional[str] = None
+    special_needs: Optional[str] = None
+    disability_declaration: Optional[str] = None
+    aggregate: Optional[int] = None
+    is_eligible: bool = True
+    merit_score: Optional[float] = None
+    merit_rank: Optional[int] = None
+    allocated_programme_id: Optional[str] = None
     student_id: Optional[str] = None
     created_at: datetime
 

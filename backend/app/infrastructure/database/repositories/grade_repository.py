@@ -39,6 +39,13 @@ class GradeRepository(BaseRepository[Grade]):
             "submitted_by": submitted_by,
         }).to_list(None)
 
+    async def get_by_student(self, tenant_id: str, student_id: str) -> List[Grade]:
+        """Return all grades for a student across all semesters and years."""
+        return await self.model.find({
+            "tenant_id": tenant_id,
+            "student_id": student_id,
+        }).sort([("academic_year", -1)]).to_list(None)
+
 class TranscriptRepository(BaseRepository[Transcript]):
     def __init__(self):
         super().__init__(Transcript)
@@ -47,7 +54,7 @@ class TranscriptRepository(BaseRepository[Transcript]):
         return await self.model.find({
             "tenant_id": tenant_id,
             "student_id": student_id
-        }).sort("academic_year", -1).to_list(None)
+        }).sort([("academic_year", -1)]).to_list(None)
 
     async def get_latest_transcript(self, tenant_id: str, student_id: str) -> Optional[Transcript]:
         transcripts = await self.get_by_student(tenant_id, student_id)

@@ -50,7 +50,11 @@ class DistributedRateLimitMiddleware(BaseHTTPMiddleware):
     def _init_redis(self):
         """Initialize Redis connection."""
         try:
-            self.redis_client = redis.from_url(self.settings.REDIS_URL)
+            self.redis_client = redis.from_url(
+                self.settings.REDIS_URL,
+                socket_timeout=1.0,
+                socket_connect_timeout=1.0,
+            )
             self.redis_client.ping()
             logger.info("✅ Distributed rate limiting initialized")
         except Exception as e:

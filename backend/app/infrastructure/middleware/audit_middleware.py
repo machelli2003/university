@@ -135,24 +135,23 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 f"Duration: {duration_ms:.2f}ms"
             )
             
-            # Log to database if repository available
-            if self.audit_repo:
-                try:
-                    # Determine entity type from path
-                    path_parts = request.url.path.strip("/").split("/")
-                    entity_type = path_parts[0] if path_parts else "unknown"
-                    
-                    await self.audit_repo.create({
-                        "tenant_id": tenant_id,
-                        "event_type": "api_request",
-                        "entity_type": entity_type,
-                        "action": f"{request.method} {request.url.path}",
-                        "performed_by": user_id,
-                        "details": audit_entry,
-                        "request_id": request_id,
-                    })
-                except Exception as e:
-                    logger.error(f"Failed to create audit log: {str(e)}")
+            # Log to database if repository available or instantiate lazily
+            try:
+                repo = self.audit_repo or AuditRepository()
+                path_parts = request.url.path.strip("/").split("/")
+                entity_type = path_parts[0] if path_parts else "unknown"
+                
+                await repo.create({
+                    "tenant_id": tenant_id,
+                    "event_type": "api_request",
+                    "entity_type": entity_type,
+                    "action": f"{request.method} {request.url.path}",
+                    "performed_by": user_id,
+                    "details": audit_entry,
+                    "request_id": request_id,
+                })
+            except Exception as e:
+                logger.error(f"Failed to create audit log: {str(e)}")
         
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id

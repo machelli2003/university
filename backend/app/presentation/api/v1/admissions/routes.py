@@ -712,7 +712,7 @@ async def get_waitlist(
     if programme_id:
         query["programme_choices.programme_id"] = programme_id
 
-    docs = await applicant_repo.model.find(query).sort("merit_rank", 1).to_list(None)
+    docs = await applicant_repo.model.find(query).sort([("merit_rank", 1)]).to_list(None)
     items = []
     for d in docs:
         items.append(WaitlistItem(
@@ -750,7 +750,7 @@ async def promote_waitlist(
         "tenant_id": tenant_id,
         "status": "waitlisted",
         "programme_choices.programme_id": programme_id
-    }).sort("merit_rank", 1).limit(promote_count).to_list(None)
+    }).sort([("merit_rank", 1)]).limit(promote_count).to_list(None)
 
     promoted = 0
     for d in docs:

@@ -10,7 +10,7 @@ class RegistrationRepository(BaseRepository[Registration]):
         return await self.model.find({
             "tenant_id": tenant_id,
             "student_id": student_id
-        }).sort("academic_year", -1).to_list(None)
+        }).sort([("academic_year", -1)]).to_list(None)
 
     async def get_by_period(self, tenant_id: str, academic_year: str, semester: str) -> List[Registration]:
         return await self.model.find({

@@ -230,6 +230,80 @@ export default function ApplicantPortalDashboardPage() {
           )}
         </div>
 
+        {/* OFFER BANNER — shown when status is offered or allocated */}
+        {(dashboardData.application_status === "offered" || dashboardData.application_status === "allocated") && (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg shadow-lg p-8 mb-8 text-white">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-5xl">🎓</span>
+              <div>
+                <h2 className="text-2xl font-bold">Congratulations! You Have Been Offered Admission</h2>
+                <p className="text-green-100 mt-1">
+                  You have been offered a place at the university. Please accept or decline your offer below.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 mt-6">
+              <button
+                id="accept-offer-btn"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem("access_token")
+                    await axios.post(
+                      `/api/v1/apply/${schoolCode}/offer/accept`,
+                      {},
+                      { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+                    )
+                    alert("🎉 Offer accepted! Welcome to the university. Your enrollment is now being processed.")
+                    window.location.reload()
+                  } catch (err: any) {
+                    alert(err.response?.data?.detail || "Failed to accept offer. Please try again.")
+                  }
+                }}
+                className="bg-white text-green-700 font-bold px-8 py-3 rounded-lg hover:bg-green-50 transition-colors shadow"
+              >
+                ✅ Accept Offer
+              </button>
+              <button
+                id="decline-offer-btn"
+                onClick={async () => {
+                  if (!confirm("Are you sure you want to decline this offer?")) return
+                  try {
+                    const token = localStorage.getItem("access_token")
+                    await axios.post(
+                      `/api/v1/apply/${schoolCode}/offer/decline`,
+                      {},
+                      { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+                    )
+                    alert("Offer declined. You can re-apply in the next admissions cycle.")
+                    window.location.reload()
+                  } catch (err: any) {
+                    alert(err.response?.data?.detail || "Failed to decline offer.")
+                  }
+                }}
+                className="bg-transparent border-2 border-white text-white font-bold px-8 py-3 rounded-lg hover:bg-green-600 transition-colors"
+              >
+                ❌ Decline Offer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Enrolled banner */}
+        {dashboardData.application_status === "enrolled" && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-lg p-8 mb-8 text-white">
+            <div className="flex items-center gap-4">
+              <span className="text-5xl">🎉</span>
+              <div>
+                <h2 className="text-2xl font-bold">You Are Now Enrolled!</h2>
+                <p className="text-blue-100 mt-1">
+                  Welcome to the university. Your student credentials have been sent to your email.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -253,9 +327,8 @@ export default function ApplicantPortalDashboardPage() {
               Review your application details before final submission
             </p>
             <Button
-              onClick={() => navigate(`/apply/${schoolCode}/review`)}
-              disabled={!dashboardData.can_submit}
-              className="w-full"
+              onClick={() => navigate(`/apply/${schoolCode}/application?tab=statement`)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
               Review Application
             </Button>
@@ -294,7 +367,10 @@ export default function ApplicantPortalDashboardPage() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">📑 Application Sections</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+            <div 
+              onClick={() => navigate(`/apply/${schoolCode}/application`)}
+              className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+            >
               <span className="text-2xl mr-4">👤</span>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Personal Information</p>
@@ -303,36 +379,45 @@ export default function ApplicantPortalDashboardPage() {
               <span className="text-green-600">✓</span>
             </div>
 
-            <div className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+            <div 
+              onClick={() => navigate(`/apply/${schoolCode}/application`)}
+              className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+            >
               <span className="text-2xl mr-4">🎓</span>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Academic Details</p>
                 <p className="text-sm text-gray-600">WASSCE results, grades</p>
               </div>
-              <span className={dashboardData.overall_progress >= 50 ? "text-green-600" : "text-gray-400"}>
+              <span className={dashboardData.overall_progress >= 50 ? "text-green-600 font-bold" : "text-gray-400"}>
                 {dashboardData.overall_progress >= 50 ? "✓" : "◯"}
               </span>
             </div>
 
-            <div className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+            <div 
+              onClick={() => navigate(`/apply/${schoolCode}/application`)}
+              className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+            >
               <span className="text-2xl mr-4">🏆</span>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Programme Choices</p>
                 <p className="text-sm text-gray-600">Select desired programmes</p>
               </div>
-              <span className={dashboardData.overall_progress >= 75 ? "text-green-600" : "text-gray-400"}>
+              <span className={dashboardData.overall_progress >= 75 ? "text-green-600 font-bold" : "text-gray-400"}>
                 {dashboardData.overall_progress >= 75 ? "✓" : "◯"}
               </span>
             </div>
 
-            <div className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+            <div 
+              onClick={() => navigate(`/apply/${schoolCode}/application`)}
+              className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+            >
               <span className="text-2xl mr-4">✅</span>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Review & Submit</p>
                 <p className="text-sm text-gray-600">Final submission</p>
               </div>
-              <span className={dashboardData.application_status === "submitted" ? "text-green-600" : "text-gray-400"}>
-                {dashboardData.application_status === "submitted" ? "✓" : "◯"}
+              <span className={dashboardData.overall_progress >= 100 || dashboardData.application_status === "submitted" ? "text-green-600 font-bold" : "text-gray-400"}>
+                {dashboardData.overall_progress >= 100 || dashboardData.application_status === "submitted" ? "✓" : "◯"}
               </span>
             </div>
           </div>

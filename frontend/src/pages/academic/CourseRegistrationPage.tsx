@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppShell } from "@/components/layout/AppShell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input"
 import { ErrorAlert, SuccessAlert, Spinner } from "@/components/ui/Feedback"
 import { useAuthStore } from "@/store/authStore"
 import { useCourses, useRegisterCourses } from "@/hooks/useAcademic"
+import { studentApi } from "@/services/api/student"
 import { getErrorMessage } from "@/services/api/client"
 
 const fallbackCourses = [
@@ -18,13 +19,40 @@ const fallbackCourses = [
 ]
 
 export default function CourseRegistrationPage() {
-  const studentId = useAuthStore((s) => s.studentId)
+  const storeStudentId = useAuthStore((s) => s.studentId)
+  const setStudentId = useAuthStore((s) => s.setStudentId)
+  const [studentId, setLocalStudentId] = useState<string | null>(storeStudentId)
+  const [resolvingStudent, setResolvingStudent] = useState(!storeStudentId)
+
   const { data: courses, isLoading } = useCourses()
   const registerMutation = useRegisterCourses()
 
   const [selected, setSelected] = useState<string[]>([])
   const [academicYear, setAcademicYear] = useState(String(new Date().getFullYear()))
   const [semester, setSemester] = useState("1")
+
+  useEffect(() => {
+    if (!studentId) {
+      setResolvingStudent(true)
+      studentApi
+        .me()
+        .then((res) => {
+          const sid = res.data?.profile?.student_id
+          if (sid) {
+            setLocalStudentId(sid)
+            setStudentId(sid)
+          }
+        })
+        .catch(() => {
+          // Failure handled by empty check
+        })
+        .finally(() => {
+          setResolvingStudent(false)
+        })
+    } else {
+      setResolvingStudent(false)
+    }
+  }, [studentId, setStudentId])
 
   const courseCatalog = courses && courses.length > 0 ? courses : fallbackCourses
 
@@ -36,7 +64,19 @@ export default function CourseRegistrationPage() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]))
   }
 
-  if (!studentId) {
+  if (resolvingStudent) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <p className="text-cocoa-500 animate-pulse">Loading student registration profile…</p>
+        </div>
+      </AppShell>
+    )
+  }
+
+  const effectiveStudentId = studentId || storeStudentId
+
+  if (!effectiveStudentId) {
     return (
       <AppShell>
         <Card className="max-w-xl mx-auto">
@@ -54,7 +94,7 @@ export default function CourseRegistrationPage() {
   const onSubmit = async () => {
     try {
       const result = await registerMutation.mutateAsync({
-        student_id: studentId,
+        student_id: effectiveStudentId,
         course_ids: selected,
         academic_year: academicYear,
         semester,

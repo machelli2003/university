@@ -32,7 +32,11 @@ async def init_redis():
     global redis_client
     settings = get_settings()
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = redis.from_url(
+            settings.REDIS_URL,
+            socket_timeout=1.0,
+            socket_connect_timeout=1.0,
+        )
         # Test connection
         redis_client.ping()
         logger.info("✅ Redis session store initialized")

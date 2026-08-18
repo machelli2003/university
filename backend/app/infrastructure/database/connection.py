@@ -71,14 +71,8 @@ async def init_db():
 
     print("[OK] Connected to MongoDB & initialized Beanie models")
     
-    # Initialize database indexes for performance optimization
-    try:
-        index_results = await IndexManager.setup_indexes(db)
-        print(f"[OK] Database indexes created: {len(index_results['created'])} new, {len(index_results['already_exist'])} existing")
-        if index_results['errors']:
-            print(f"[WARNING] Index errors (non-fatal): {index_results['errors']}")
-    except Exception as e:
-        print(f"[WARNING] Could not setup indexes: {str(e)}")
+    # Initialize database indexes in background to prevent blocking startup
+    asyncio.create_task(IndexManager.setup_indexes(db))
 
 async def close_db():
     global client

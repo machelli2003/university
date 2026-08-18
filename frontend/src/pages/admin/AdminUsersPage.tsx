@@ -230,48 +230,70 @@ export default function AdminUsersPage() {
               <p>Loading...</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full table-auto">
+                <table className="w-full text-left text-sm border-collapse">
                   <thead>
-                    <tr>
-                      <th className="text-left">Email</th>
-                      <th className="text-left">Name</th>
-                      <th className="text-left">Role</th>
-                      <th className="text-left">Status</th>
-                      <th className="text-left">Locked</th>
-                      <th className="text-left">Actions</th>
+                    <tr className="border-b border-cocoa-100 text-xs font-semibold text-cocoa-500 uppercase tracking-wider">
+                      <th className="py-3 px-4">Email</th>
+                      <th className="py-3 px-4">Name</th>
+                      <th className="py-3 px-4">Role</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Locked</th>
+                      <th className="py-3 px-4">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-cocoa-100">
                     {users.map((u) => (
-                      <tr key={u.id} className={u.is_active ? "" : "bg-red-50"}>
-                        <td>{u.email}</td>
-                        <td>{u.first_name} {u.last_name}</td>
-                        <td>{u.role}</td>
-                        <td>{u.is_active ? "Active" : "Inactive"}</td>
-                        <td>{u.locked_until ? new Date(u.locked_until).toLocaleString() : "No"}</td>
-                        <td className="space-x-2">
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            onClick={() => setEditingUser(u)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            onClick={() => handleToggleActive(u)}
-                          >
-                            {u.is_active ? "Deactivate" : "Activate"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            onClick={() => handleUnlock(u)}
-                            disabled={!u.locked_until && u.login_attempts === 0}
-                          >
-                            Unlock
-                          </button>
+                      <tr key={u.id} className={u.is_active ? "hover:bg-cocoa-50/50" : "bg-red-50/50 hover:bg-red-50"}>
+                        <td className="py-3 px-4 font-medium text-ink">{u.email}</td>
+                        <td className="py-3 px-4 text-cocoa-700">{u.first_name} {u.last_name}</td>
+                        <td className="py-3 px-4 text-cocoa-600 font-mono text-xs">{u.role}</td>
+                        <td className="py-3 px-4">
+                          {u.is_active ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Inactive
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {u.locked_until ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              Locked ({new Date(u.locked_until).toLocaleTimeString()})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                              No
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs font-medium rounded border border-cocoa-200 hover:bg-cocoa-50 text-cocoa-700"
+                              onClick={() => setEditingUser(u)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs font-medium rounded border border-cocoa-200 hover:bg-cocoa-50 text-cocoa-700"
+                              onClick={() => handleToggleActive(u)}
+                            >
+                              {u.is_active ? "Deactivate" : "Activate"}
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs font-medium rounded border border-cocoa-200 hover:bg-cocoa-50 text-cocoa-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              onClick={() => handleUnlock(u)}
+                              disabled={!u.locked_until && u.login_attempts === 0}
+                            >
+                              Unlock
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -28,4 +28,4 @@ class ApprovalTaskRepository(BaseRepository[ApprovalTask]):
         return await self.model.find({"approver_id": approver_id, "status": "pending"}).to_list(None)
 
     async def get_by_instance(self, instance_id: str) -> List[ApprovalTask]:
-        return await self.model.find({"workflow_instance_id": instance_id}).sort("step_order", 1).to_list(None)
+        return await self.model.find({"workflow_instance_id": instance_id}).sort([("step_order", 1)]).to_list(None)

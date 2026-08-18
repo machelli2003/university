@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import axios from "axios"
@@ -64,8 +64,11 @@ const GRADE_VALUES: Record<string, number> = {
 export default function ApplicantApplicationFormPage() {
   const { schoolCode } = useParams<{ schoolCode: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get("tab")
+  const defaultTab = (tabParam === "statement" || tabParam === "academic" || tabParam === "programmes") ? tabParam : "personal"
 
-  const [activeTab, setActiveTab] = useState<"personal" | "academic" | "programmes" | "statement">("personal")
+  const [activeTab, setActiveTab] = useState<"personal" | "academic" | "programmes" | "statement">(defaultTab)
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -146,12 +149,46 @@ export default function ApplicantApplicationFormPage() {
             headers: { Authorization: `Bearer ${token}` },
           })
           if (profileRes.data) {
-            setPersonalInfo((prev) => ({
-              ...prev,
-              first_name: profileRes.data.first_name || "",
-              last_name: profileRes.data.last_name || "",
-              phone: profileRes.data.phone || "",
-            }))
+            const data = profileRes.data
+            setPersonalInfo({
+              first_name: data.first_name || "",
+              last_name: data.last_name || "",
+              date_of_birth: data.date_of_birth ? data.date_of_birth.split("T")[0] : "",
+              gender: data.gender || "Male",
+              phone: data.phone || "",
+              address: data.address || "",
+              city: data.city || "",
+              region: data.region || "Greater Accra",
+              nationality: data.nationality || "Ghanaian",
+            })
+
+            if (data.results && Object.keys(data.results).length > 0) {
+              const loadedSubjects: SubjectGrade[] = Object.entries(data.results).map(
+                ([subj, grd]) => ({ subject: subj, grade: String(grd) })
+              )
+              setAcademicInfo({
+                wassce_year: data.exam_year || new Date().getFullYear(),
+                wassce_index_number: data.index_number || "",
+                wassce_center: "",
+                subjects: loadedSubjects,
+              })
+            }
+
+            if (data.programme_choices && data.programme_choices.length > 0) {
+              setProgrammeChoices({
+                choice_1: data.programme_choices[0]?.programme_code || "",
+                choice_2: data.programme_choices[1]?.programme_code || "",
+                choice_3: data.programme_choices[2]?.programme_code || "",
+              })
+            }
+
+            if (data.statement_of_purpose || data.special_needs || data.disability_declaration) {
+              setAdditionalInfo({
+                statement_of_purpose: data.statement_of_purpose || "",
+                special_needs: data.special_needs || "",
+                disability_declaration: data.disability_declaration || "None",
+              })
+            }
           }
         } catch {
           // Draft not submitted yet
@@ -441,7 +478,25 @@ export default function ApplicantApplicationFormPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button type="button" onClick={() => setActiveTab("academic")} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button 
+                  type="button" 
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem("access_token")
+                      if (token) {
+                        await axios.put(
+                          `/api/v1/apply/${schoolCode}/personal`,
+                          personalInfo,
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        )
+                      }
+                    } catch (e) {
+                      console.error("Auto-save personal info error:", e)
+                    }
+                    setActiveTab("academic")
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
                   Next: WASSCE Results →
                 </Button>
               </div>

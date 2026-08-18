@@ -31,7 +31,7 @@ class FinancialClearanceRepository(BaseRepository[FinancialClearance]):
         return await self.model.find({
             "tenant_id": tenant_id,
             "student_id": student_id
-        }).sort("academic_year", -1).to_list(None)
+        }).sort([("academic_year", -1)]).to_list(None)
 
     async def get_cleared_students(
         self,

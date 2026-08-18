@@ -33,8 +33,20 @@ class AllocationEngine:
 
             for choice_order, choice in enumerate(choices, 1):
                 programme_id = choice.get("programme_id")
-                capacity_info = programme_capacities.get(programme_id, {})
-                planned = capacity_info.get("planned_capacity", 0)
+                capacity_info = programme_capacities.get(programme_id)
+
+                # If programme not in capacity dict, treat as unlimited (100 seats)
+                if capacity_info is None:
+                    allocations.append(AllocationResult(
+                        applicant_id=app_id,
+                        allocated_programme_id=programme_id,
+                        choice_order=choice_order,
+                        allocation_status="allocated"
+                    ))
+                    allocated = True
+                    break
+
+                planned = capacity_info.get("planned_capacity", 100)
                 reserved = capacity_info.get("reserved_capacity", 0)
 
                 available = planned - reserved - programme_usage.get(programme_id, 0)

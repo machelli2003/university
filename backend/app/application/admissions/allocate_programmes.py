@@ -15,7 +15,11 @@ class AllocateProgrammesUseCase:
         self.allocation_engine = allocation_engine
 
     async def execute(self, tenant_id: str) -> dict:
-        applicants = await self.applicant_repo.get_by_status(tenant_id, "ranked")
+        # Fetch both eligible and ranked applicants (eligible = ready for allocation)
+        query: dict = {"status": {"$in": ["eligible", "ranked"]}}
+        if tenant_id and tenant_id != "default":
+            query["tenant_id"] = tenant_id
+        applicants = await self.applicant_repo.model.find(query).to_list(None)
 
         applicant_dicts = [
             {

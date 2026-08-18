@@ -19,23 +19,33 @@ class EvaluateEligibilityUseCase:
         if not applicant:
             raise ValueError("Applicant not found")
 
-        if applicant.status != "results_approved":
-            raise ValueError("Results must be approved before eligibility check")
+        status_val = applicant.status.value if hasattr(applicant.status, "value") else str(applicant.status)
+        if status_val not in ["results_approved", "submitted", "results_uploaded", "under_review"]:
+            raise ValueError(f"Results must be approved before eligibility check (current status: {status_val})")
 
         eligible_programmes = []
+        skipped_programmes = []
 
         for choice in applicant.programme_choices:
             programme_id = choice.get("programme_id")
             programme = await self.program_repo.get_by_id(programme_id)
 
             if not programme:
+                # Programme not found in DB — treat as no restrictions (open admission)
+                skipped_programmes.append(programme_id)
+                eligible_programmes.append(programme_id)
                 continue
 
             requirements = {
-                "required_subjects": programme.required_subjects,
-                "minimum_grades": programme.minimum_grades,
+                "required_subjects": programme.required_subjects or [],
+                "minimum_grades": programme.minimum_grades or {},
                 "aggregate_threshold": programme.aggregate_threshold,
             }
+
+            # If programme has no requirements configured at all, treat as eligible
+            if not requirements["required_subjects"] and not requirements["minimum_grades"] and not requirements["aggregate_threshold"]:
+                eligible_programmes.append(programme_id)
+                continue
 
             result = await self.eligibility_engine.check_eligibility(
                 applicant.results, requirements
