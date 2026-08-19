@@ -76,3 +76,22 @@ export function useResolveMaintenance() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["maintenance", "pending"] }),
   })
 }
+
+export function useMyHousing() {
+  return useQuery({
+    queryKey: ["my-housing"],
+    queryFn: () => accommodationApi.getMyHousing(),
+  })
+}
+
+export function useSelectHousing() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: any) => accommodationApi.selectHousing(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-housing"] })
+      queryClient.invalidateQueries({ queryKey: ["rooms"] })
+    },
+  })
+}
+

@@ -33,8 +33,17 @@ class Accommodation(Document):
     tenant_id: str
     student_id: str
 
-    hall_id: str
-    room_id: str
+    housing_type: str = "school_hostel"  # school_hostel, outside_hostel, private_renting
+    hall_id: Optional[str] = None
+    room_id: Optional[str] = None
+
+    outside_hostel_name: Optional[str] = None
+    outside_hostel_address: Optional[str] = None
+    outside_hostel_contact: Optional[str] = None
+
+    private_address: Optional[str] = None
+    private_city: Optional[str] = None
+    private_contact: Optional[str] = None
 
     allocation_date: datetime = Field(default_factory=datetime.utcnow)
     check_in_date: Optional[datetime] = None

@@ -10,6 +10,7 @@ secrets into the repository. Use carefully.
 
 import os
 import sys
+import certifi
 from typing import Optional
 
 # Ensure backend directory is on Python path regardless of execution location
@@ -36,6 +37,7 @@ async def create_admin(email: str, password: str, client: Optional[AsyncIOMotorC
             serverSelectionTimeoutMS=10000,
             connectTimeoutMS=10000,
             socketTimeoutMS=20000,
+            tlsCAFile=certifi.where(),
             tlsAllowInvalidCertificates=True,
         )
         should_close = True

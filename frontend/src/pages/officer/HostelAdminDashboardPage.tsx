@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from "react"
+import { AppShell } from "@/components/layout/AppShell"
 import { useAuthStore } from "@/store/authStore"
-import axios from "axios"
+import { apiClient, getErrorMessage } from "@/services/api/client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { Card } from "@/components/ui/Card"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
+import { Badge } from "@/components/ui/Badge"
+import { Spinner, ErrorAlert, SuccessAlert } from "@/components/ui/Feedback"
+import {
+  Building2,
+  Bed,
+  Wrench,
+  UserCheck,
+  PlusCircle,
+  BarChart3,
+  RefreshCw,
+  Home,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react"
 
 interface HostelInfo {
   hostel_id: string
@@ -38,294 +55,559 @@ interface HostelDashboardData {
   bed_requests: BedRequest[]
 }
 
+interface HallItem {
+  id: string
+  name: string
+  capacity: number
+  gender?: string
+  is_active?: boolean
+}
+
 export default function HostelAdminDashboardPage() {
   const { user } = useAuthStore()
   const [data, setData] = useState<HostelDashboardData | null>(null)
+  const [halls, setHalls] = useState<HallItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTab, setSelectedTab] = useState<"overview" | "occupancy" | "maintenance" | "requests">("overview")
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isForbidden, setIsForbidden] = useState(false)
+  const [selectedTab, setSelectedTab] = useState<"overview" | "occupancy" | "maintenance" | "requests" | "manage">("overview")
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const token = localStorage.getItem("access_token")
-        if (!token) return
+  // Create Hall Form State
+  const [newHallName, setNewHallName] = useState("")
+  const [newHallCapacity, setNewHallCapacity] = useState("100")
+  const [newHallGender, setNewHallGender] = useState("mixed")
+  const [isCreatingHall, setIsCreatingHall] = useState(false)
 
-        const response = await axios.get(`/api/v1/officer/dashboard/hostel`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+  // Create Room Form State
+  const [selectedHallForRoom, setSelectedHallForRoom] = useState("")
+  const [newRoomNumber, setNewRoomNumber] = useState("")
+  const [newRoomCapacity, setNewRoomCapacity] = useState("4")
+  const [newRoomType, setNewRoomType] = useState("quad")
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false)
 
-        setData(response.data)
-      } catch (error) {
-        console.error("Failed to load Hostel dashboard:", error)
-      } finally {
-        setLoading(false)
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null)
+  const [actionErrorMsg, setActionErrorMsg] = useState<string | null>(null)
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      setErrorMsg(null)
+      setIsForbidden(false)
+
+      const [dashRes, hallsRes] = await Promise.allSettled([
+        apiClient.get(`/officer/dashboard/hostel`),
+        apiClient.get(`/accommodation/halls`),
+      ])
+
+      if (dashRes.status === "fulfilled") {
+        setData(dashRes.value.data)
+      } else {
+        const err = dashRes.reason
+        if (err?.response?.status === 403) {
+          setIsForbidden(true)
+        } else {
+          setErrorMsg(getErrorMessage(err))
+        }
       }
+
+      if (hallsRes.status === "fulfilled") {
+        setHalls(hallsRes.value.data)
+      }
+    } catch (error: any) {
+      console.error("Failed to load Hostel dashboard:", error)
+      setErrorMsg(getErrorMessage(error))
+    } finally {
+      setLoading(false)
     }
-
-    fetchDashboard()
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Loading dashboard...</div>
-      </div>
-    )
   }
 
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-600">Failed to load dashboard data</div>
-      </div>
-    )
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const handleCreateHall = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newHallName) return
+    setIsCreatingHall(true)
+    setActionSuccessMsg(null)
+    setActionErrorMsg(null)
+
+    try {
+      await apiClient.post("/accommodation/halls", {
+        name: newHallName,
+        capacity: parseInt(newHallCapacity, 10) || 100,
+        gender: newHallGender,
+        is_active: true,
+      })
+      setActionSuccessMsg(`Hall "${newHallName}" created successfully!`)
+      setNewHallName("")
+      setNewHallCapacity("100")
+      fetchDashboardData()
+    } catch (err: any) {
+      setActionErrorMsg(getErrorMessage(err))
+    } finally {
+      setIsCreatingHall(false)
+    }
+  }
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedHallForRoom || !newRoomNumber) return
+    setIsCreatingRoom(true)
+    setActionSuccessMsg(null)
+    setActionErrorMsg(null)
+
+    try {
+      await apiClient.post("/accommodation/rooms", {
+        hall_id: selectedHallForRoom,
+        room_number: newRoomNumber,
+        capacity: parseInt(newRoomCapacity, 10) || 4,
+        room_type: newRoomType,
+      })
+      setActionSuccessMsg(`Room "${newRoomNumber}" added successfully!`)
+      setNewRoomNumber("")
+      fetchDashboardData()
+    } catch (err: any) {
+      setActionErrorMsg(getErrorMessage(err))
+    } finally {
+      setIsCreatingRoom(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Hostel Administration Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome, {user?.first_name || "Hostel Admin"}</p>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-          <Card className="p-6 bg-white shadow">
-            <div className="text-sm font-medium text-gray-600">Hostels</div>
-            <div className="mt-2 text-3xl font-bold text-blue-600">{data.total_hostels}</div>
-          </Card>
-          <Card className="p-6 bg-white shadow">
-            <div className="text-sm font-medium text-gray-600">Total Beds</div>
-            <div className="mt-2 text-3xl font-bold text-green-600">{data.total_beds}</div>
-          </Card>
-          <Card className="p-6 bg-white shadow">
-            <div className="text-sm font-medium text-gray-600">Occupied</div>
-            <div className="mt-2 text-3xl font-bold text-purple-600">{data.occupied_beds}</div>
-          </Card>
-          <Card className="p-6 bg-white shadow">
-            <div className="text-sm font-medium text-gray-600">Occupancy Rate</div>
-            <div className="mt-2 text-3xl font-bold text-orange-600">{data.occupancy_rate.toFixed(1)}%</div>
-          </Card>
-          <Card className="p-6 bg-white shadow">
-            <div className="text-sm font-medium text-gray-600">Pending Issues</div>
-            <div className="mt-2 text-3xl font-bold text-red-600">{data.pending_maintenance}</div>
-          </Card>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="flex border-b">
-            <button
-              onClick={() => setSelectedTab("overview")}
-              className={`px-6 py-4 font-medium ${
-                selectedTab === "overview"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setSelectedTab("occupancy")}
-              className={`px-6 py-4 font-medium ${
-                selectedTab === "occupancy"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Occupancy
-            </button>
-            <button
-              onClick={() => setSelectedTab("maintenance")}
-              className={`px-6 py-4 font-medium ${
-                selectedTab === "maintenance"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Maintenance
-            </button>
-            <button
-              onClick={() => setSelectedTab("requests")}
-              className={`px-6 py-4 font-medium ${
-                selectedTab === "requests"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Requests
-            </button>
+    <AppShell>
+      <div className="space-y-6">
+        {/* Header Title */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-ink mb-1">Hostel Management Workspace</h1>
+            <p className="text-cocoa-400">
+              Welcome, {user?.first_name || "Hostel Administrator"}. Oversee hall allocations, room inventory, and maintenance.
+            </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchDashboardData}
+            isLoading={loading}
+            className="self-start md:self-auto border-cocoa-200 text-cocoa-700 hover:bg-cocoa-50"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Data
+          </Button>
+        </div>
 
-          <div className="p-6">
-            {/* Overview Tab */}
-            {selectedTab === "overview" && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Hostel System Overview</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 p-4 rounded">
-                      <div className="text-sm text-gray-600">Total Hostels</div>
-                      <div className="text-2xl font-bold text-blue-600 mt-1">{data.total_hostels}</div>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded">
-                      <div className="text-sm text-gray-600">Total Beds</div>
-                      <div className="text-2xl font-bold text-green-600 mt-1">{data.total_beds}</div>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded">
-                      <div className="text-sm text-gray-600">Occupied Beds</div>
-                      <div className="text-2xl font-bold text-purple-600 mt-1">{data.occupied_beds}</div>
-                    </div>
-                    <div className="bg-orange-50 p-4 rounded">
-                      <div className="text-sm text-gray-600">Available Beds</div>
-                      <div className="text-2xl font-bold text-orange-600 mt-1">{data.total_beds - data.occupied_beds}</div>
-                    </div>
-                  </div>
+        {/* Global Notifications */}
+        {actionSuccessMsg && <SuccessAlert message={actionSuccessMsg} />}
+        {actionErrorMsg && <ErrorAlert message={actionErrorMsg} />}
+
+        {loading ? (
+          <div className="flex items-center justify-center p-12">
+            <Spinner />
+          </div>
+        ) : isForbidden ? (
+          <Card className="max-w-md mx-auto p-6 text-center shadow-md">
+            <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
+            <p className="text-sm text-cocoa-500 mb-4">
+              The Hostel Management Workspace is reserved for Hostel Managers, Accommodation Officers, and University Management.
+            </p>
+            <p className="text-xs text-cocoa-400 mb-6">
+              If you are a student looking for room booking or fee clearance, please visit the Student Accommodation Portal.
+            </p>
+            <a
+              href="/accommodation"
+              className="inline-block bg-cocoa-900 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-cocoa-800 transition-colors"
+            >
+              Go to Student Accommodation Portal
+            </a>
+          </Card>
+        ) : !data ? (
+          <Card className="max-w-md mx-auto p-6 text-center">
+            <h2 className="text-lg font-semibold text-red-600 mb-2">Failed to Load Dashboard Data</h2>
+            <p className="text-sm text-cocoa-500 mb-4">{errorMsg || "Unable to retrieve hostel metrics."}</p>
+            <Button onClick={fetchDashboardData}>Retry Loading</Button>
+          </Card>
+        ) : (
+          <>
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <Card className="p-5 border-l-4 border-l-cocoa-600">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-cocoa-400 uppercase tracking-wider">Total Halls</p>
+                  <Building2 className="h-5 w-5 text-cocoa-600" />
                 </div>
+                <p className="text-2xl font-bold text-ink mt-2">{data.total_hostels}</p>
+              </Card>
 
-                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg">
-                  <div className="flex justify-between items-center">
+              <Card className="p-5 border-l-4 border-l-green-600">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-cocoa-400 uppercase tracking-wider">Total Beds</p>
+                  <Bed className="h-5 w-5 text-green-600" />
+                </div>
+                <p className="text-2xl font-bold text-green-700 mt-2">{data.total_beds}</p>
+              </Card>
+
+              <Card className="p-5 border-l-4 border-l-purple-600">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-cocoa-400 uppercase tracking-wider">Occupied Beds</p>
+                  <UserCheck className="h-5 w-5 text-purple-600" />
+                </div>
+                <p className="text-2xl font-bold text-purple-700 mt-2">{data.occupied_beds}</p>
+              </Card>
+
+              <Card className="p-5 border-l-4 border-l-amber-500">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-cocoa-400 uppercase tracking-wider">Occupancy Rate</p>
+                  <BarChart3 className="h-5 w-5 text-amber-500" />
+                </div>
+                <p className="text-2xl font-bold text-amber-700 mt-2">{data.occupancy_rate.toFixed(1)}%</p>
+              </Card>
+
+              <Card className="p-5 border-l-4 border-l-red-500">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-cocoa-400 uppercase tracking-wider">Pending Maintenance</p>
+                  <Wrench className="h-5 w-5 text-red-500" />
+                </div>
+                <p className="text-2xl font-bold text-red-700 mt-2">{data.pending_maintenance}</p>
+              </Card>
+            </div>
+
+            {/* Main Tabs Navigation */}
+            <Card>
+              <CardHeader className="border-b border-cocoa-100 pb-0">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedTab("overview")}
+                    className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                      selectedTab === "overview"
+                        ? "border-cocoa-900 text-cocoa-900 font-semibold"
+                        : "border-transparent text-cocoa-500 hover:text-cocoa-700"
+                    }`}
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                    Overview
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTab("occupancy")}
+                    className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                      selectedTab === "occupancy"
+                        ? "border-cocoa-900 text-cocoa-900 font-semibold"
+                        : "border-transparent text-cocoa-500 hover:text-cocoa-700"
+                    }`}
+                  >
+                    <Building2 className="h-4 w-4" />
+                    Halls &amp; Occupancy
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTab("maintenance")}
+                    className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                      selectedTab === "maintenance"
+                        ? "border-cocoa-900 text-cocoa-900 font-semibold"
+                        : "border-transparent text-cocoa-500 hover:text-cocoa-700"
+                    }`}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    Maintenance ({data.pending_maintenance})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTab("requests")}
+                    className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                      selectedTab === "requests"
+                        ? "border-cocoa-900 text-cocoa-900 font-semibold"
+                        : "border-transparent text-cocoa-500 hover:text-cocoa-700"
+                    }`}
+                  >
+                    <UserCheck className="h-4 w-4" />
+                    Bed Allocations
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTab("manage")}
+                    className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                      selectedTab === "manage"
+                        ? "border-cocoa-900 text-cocoa-900 font-semibold"
+                        : "border-transparent text-cocoa-500 hover:text-cocoa-700"
+                    }`}
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    Create Hall / Room
+                  </button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-6">
+                {/* TAB 1: OVERVIEW */}
+                {selectedTab === "overview" && (
+                  <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Overall Occupancy Rate</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {data.occupied_beds} of {data.total_beds} beds occupied
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-4xl font-bold text-blue-600">{data.occupancy_rate.toFixed(1)}%</div>
-                    </div>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-3 mt-4">
-                    <div
-                      className="bg-blue-600 h-3 rounded-full"
-                      style={{
-                        width: `${Math.min(data.occupancy_rate, 100)}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Occupancy Tab */}
-            {selectedTab === "occupancy" && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Hostel Occupancy Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {data.hostels.map((hostel) => {
-                    const occupancyPercent = (hostel.occupied_beds / hostel.total_beds) * 100
-                    return (
-                      <div key={hostel.hostel_id} className="p-4 border rounded-lg hover:shadow-md transition">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="font-semibold text-gray-900">{hostel.hostel_name}</div>
-                          <span className="text-sm font-medium text-gray-600">{occupancyPercent.toFixed(0)}%</span>
+                      <h3 className="text-base font-semibold text-ink mb-3">Hostel System Summary</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-cocoa-50 border border-cocoa-100 p-4 rounded-lg">
+                          <p className="text-xs text-cocoa-500 font-medium">Active Hostels</p>
+                          <p className="text-xl font-bold text-cocoa-900 mt-1">{data.total_hostels}</p>
                         </div>
-                        <div className="text-sm text-gray-600 mb-2">
-                          {hostel.occupied_beds}/{hostel.total_beds} beds
+                        <div className="bg-green-50 border border-green-100 p-4 rounded-lg">
+                          <p className="text-xs text-green-700 font-medium">Total Bed Capacity</p>
+                          <p className="text-xl font-bold text-green-900 mt-1">{data.total_beds}</p>
                         </div>
-                        <div className="w-full bg-gray-300 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full"
-                            style={{
-                              width: `${Math.min(occupancyPercent, 100)}%`,
-                            }}
-                          ></div>
+                        <div className="bg-purple-50 border border-purple-100 p-4 rounded-lg">
+                          <p className="text-xs text-purple-700 font-medium">Current Occupants</p>
+                          <p className="text-xl font-bold text-purple-900 mt-1">{data.occupied_beds}</p>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Maintenance Tab */}
-            {selectedTab === "maintenance" && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Maintenance Requests</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Request ID</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Hostel</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Issue</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.maintenance_requests.map((request) => (
-                        <tr key={request.request_id} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4 text-gray-900">{request.request_id.substring(0, 8)}</td>
-                          <td className="py-3 px-4 text-gray-700">{request.hostel_name}</td>
-                          <td className="py-3 px-4 text-gray-700">{request.issue}</td>
-                          <td className="py-3 px-4 text-gray-700">{request.submitted_date}</td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                request.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : request.status === "in-progress"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm">
-                              View
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Requests Tab */}
-            {selectedTab === "requests" && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Bed Requests ({data.pending_requests})</h3>
-                <div className="space-y-3">
-                  {data.bed_requests.map((request) => (
-                    <div key={request.request_id} className="p-4 border rounded-lg hover:shadow-md transition">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-semibold text-gray-900">{request.student_name}</div>
-                          <div className="text-sm text-gray-600">Prefers: {request.hostel_preference}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              request.status === "approved"
-                                ? "bg-green-100 text-green-800"
-                                : request.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                          </span>
-                          <Button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm">
-                            Review
-                          </Button>
+                        <div className="bg-amber-50 border border-amber-100 p-4 rounded-lg">
+                          <p className="text-xs text-amber-700 font-medium">Available Vacancies</p>
+                          <p className="text-xl font-bold text-amber-900 mt-1">{Math.max(0, data.total_beds - data.occupied_beds)}</p>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+
+                    <div className="rounded-xl bg-cocoa-50/70 border border-cocoa-100 p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <div>
+                          <h4 className="font-semibold text-ink">University Occupancy Progress</h4>
+                          <p className="text-xs text-cocoa-400">
+                            {data.occupied_beds} of {data.total_beds} beds filled institutional-wide
+                          </p>
+                        </div>
+                        <span className="text-2xl font-bold text-cocoa-800">{data.occupancy_rate.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-cocoa-200 rounded-full h-3">
+                        <div
+                          className="bg-cocoa-800 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(data.occupancy_rate, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: OCCUPANCY BREAKDOWN */}
+                {selectedTab === "occupancy" && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-semibold text-ink">Halls of Residence Occupancy</h3>
+                    {data.hostels.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-cocoa-200 rounded-xl bg-cocoa-50/40">
+                        <Building2 className="h-10 w-10 text-cocoa-400 mx-auto mb-2" />
+                        <p className="font-semibold text-cocoa-700">No Halls Created Yet</p>
+                        <p className="text-xs text-cocoa-500 mt-1 mb-4">
+                          You haven't added any halls of residence to the system.
+                        </p>
+                        <Button size="sm" onClick={() => setSelectedTab("manage")}>
+                          <PlusCircle className="h-4 w-4 mr-2" />
+                          Create Your First Hall
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {data.hostels.map((hostel) => {
+                          const rate = hostel.total_beds > 0 ? (hostel.occupied_beds / hostel.total_beds) * 100 : 0
+                          return (
+                            <div key={hostel.hostel_id} className="p-4 rounded-lg border border-cocoa-100 bg-white hover:border-cocoa-300 transition-colors space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-ink text-sm flex items-center gap-2">
+                                  <Home className="h-4 w-4 text-cocoa-600" />
+                                  {hostel.hostel_name}
+                                </span>
+                                <Badge variant={rate >= 90 ? "warning" : "success"}>
+                                  {rate.toFixed(0)}% Full
+                                </Badge>
+                              </div>
+                              <div className="flex justify-between text-xs text-cocoa-500">
+                                <span>Occupied: {hostel.occupied_beds} beds</span>
+                                <span>Total: {hostel.total_beds} beds</span>
+                              </div>
+                              <div className="w-full bg-cocoa-100 rounded-full h-2">
+                                <div
+                                  className="bg-cocoa-700 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(rate, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: MAINTENANCE REQUESTS */}
+                {selectedTab === "maintenance" && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-semibold text-ink">Maintenance Reports ({data.maintenance_requests.length})</h3>
+                    {data.maintenance_requests.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-cocoa-200 rounded-xl bg-cocoa-50/40">
+                        <Wrench className="h-10 w-10 text-cocoa-400 mx-auto mb-2" />
+                        <p className="font-semibold text-cocoa-700">No Maintenance Reports</p>
+                        <p className="text-xs text-cocoa-500 mt-1">There are no active or pending maintenance requests submitted.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border border-cocoa-100 rounded-lg">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-cocoa-50 text-cocoa-700 font-semibold border-b border-cocoa-100">
+                            <tr>
+                              <th className="py-3 px-4">Request ID</th>
+                              <th className="py-3 px-4">Hostel / Location</th>
+                              <th className="py-3 px-4">Reported Issue</th>
+                              <th className="py-3 px-4">Date Submitted</th>
+                              <th className="py-3 px-4">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-cocoa-100">
+                            {data.maintenance_requests.map((m) => (
+                              <tr key={m.request_id} className="hover:bg-cocoa-50/50 transition-colors">
+                                <td className="py-3 px-4 font-mono text-xs text-ink">{m.request_id.substring(0, 10)}</td>
+                                <td className="py-3 px-4 text-cocoa-800 font-medium">{m.hostel_name}</td>
+                                <td className="py-3 px-4 text-cocoa-600">{m.issue}</td>
+                                <td className="py-3 px-4 text-cocoa-400 text-xs">{m.submitted_date}</td>
+                                <td className="py-3 px-4">
+                                  <Badge variant={m.status === "completed" ? "success" : m.status === "in-progress" ? "info" : "warning"}>
+                                    {m.status.toUpperCase()}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 4: BED REQUESTS */}
+                {selectedTab === "requests" && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-semibold text-ink">Recent Bed Allocations</h3>
+                    {data.bed_requests.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-cocoa-200 rounded-xl bg-cocoa-50/40">
+                        <UserCheck className="h-10 w-10 text-cocoa-400 mx-auto mb-2" />
+                        <p className="font-semibold text-cocoa-700">No Bed Allocations Yet</p>
+                        <p className="text-xs text-cocoa-500 mt-1">There are currently no bed requests or student room allocations recorded.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {data.bed_requests.map((r) => (
+                          <div key={r.request_id} className="p-4 rounded-lg border border-cocoa-100 bg-white flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm text-ink">{r.student_name}</p>
+                              <p className="text-xs text-cocoa-400">Assigned / Preferred: {r.hostel_preference}</p>
+                            </div>
+                            <Badge variant={r.status === "approved" ? "success" : r.status === "pending" ? "warning" : "default"}>
+                              {r.status.toUpperCase()}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 5: CREATE HALL & ROOM */}
+                {selectedTab === "manage" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Create Hall Form */}
+                    <div className="border border-cocoa-100 rounded-xl p-5 bg-white space-y-4">
+                      <h4 className="font-semibold text-ink text-base flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-cocoa-600" />
+                        Create New Hall of Residence
+                      </h4>
+                      <form onSubmit={handleCreateHall} className="space-y-4">
+                        <Input
+                          label="Hall Name"
+                          placeholder="e.g. Nelson Mandela Hall"
+                          value={newHallName}
+                          onChange={(e) => setNewHallName(e.target.value)}
+                          required
+                        />
+
+                        <Input
+                          label="Total Bed Capacity"
+                          type="number"
+                          value={newHallCapacity}
+                          onChange={(e) => setNewHallCapacity(e.target.value)}
+                          required
+                        />
+
+                        <Select
+                          label="Gender Restriction"
+                          value={newHallGender}
+                          onChange={(e) => setNewHallGender(e.target.value)}
+                        >
+                          <option value="mixed">Mixed (Male &amp; Female)</option>
+                          <option value="male">Male Only</option>
+                          <option value="female">Female Only</option>
+                        </Select>
+
+                        <Button type="submit" isLoading={isCreatingHall} className="w-full">
+                          Create Hall of Residence
+                        </Button>
+                      </form>
+                    </div>
+
+                    {/* Add Room Form */}
+                    <div className="border border-cocoa-100 rounded-xl p-5 bg-white space-y-4">
+                      <h4 className="font-semibold text-ink text-base flex items-center gap-2">
+                        <Bed className="h-5 w-5 text-cocoa-600" />
+                        Add Room to Hall
+                      </h4>
+                      <form onSubmit={handleCreateRoom} className="space-y-4">
+                        <Select
+                          label="Select Hall"
+                          value={selectedHallForRoom}
+                          onChange={(e) => setSelectedHallForRoom(e.target.value)}
+                          required
+                        >
+                          <option value="">Select a hall...</option>
+                          {halls.map((h) => (
+                            <option key={h.id} value={h.id}>
+                              {h.name}
+                            </option>
+                          ))}
+                        </Select>
+
+                        <Input
+                          label="Room Number"
+                          placeholder="e.g. A-101"
+                          value={newRoomNumber}
+                          onChange={(e) => setNewRoomNumber(e.target.value)}
+                          required
+                        />
+
+                        <Input
+                          label="Room Capacity (Beds)"
+                          type="number"
+                          value={newRoomCapacity}
+                          onChange={(e) => setNewRoomCapacity(e.target.value)}
+                          required
+                        />
+
+                        <Select
+                          label="Room Type"
+                          value={newRoomType}
+                          onChange={(e) => setNewRoomType(e.target.value)}
+                        >
+                          <option value="single">Single Bed Room</option>
+                          <option value="double">Double (2 Beds)</option>
+                          <option value="quad">Quad (4 Beds)</option>
+                        </Select>
+
+                        <Button type="submit" isLoading={isCreatingRoom} disabled={!selectedHallForRoom || !newRoomNumber} className="w-full">
+                          Add Room to Selected Hall
+                        </Button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
-    </div>
+    </AppShell>
   )
 }

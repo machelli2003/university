@@ -62,3 +62,33 @@ export interface RoomOccupantResponse {
   check_out_date?: string
   is_active: boolean
 }
+
+export interface HousingSelectionRequest {
+  housing_type: "school_hostel" | "outside_hostel" | "private_renting"
+  hall_id?: string
+  room_id?: string
+  outside_hostel_name?: string
+  outside_hostel_address?: string
+  outside_hostel_contact?: string
+  private_address?: string
+  private_city?: string
+  private_contact?: string
+}
+
+export interface StudentHousingStatusResponse {
+  student_id: string
+  school_fee_paid: boolean
+  hostel_fee_paid: boolean
+  housing_status: "unassigned" | "school_hostel" | "outside_hostel" | "private_renting"
+  hall_id?: string
+  hall_name?: string
+  room_id?: string
+  room_number?: string
+  outside_hostel_name?: string
+  outside_hostel_address?: string
+  outside_hostel_contact?: string
+  private_address?: string
+  private_city?: string
+  private_contact?: string
+}
+

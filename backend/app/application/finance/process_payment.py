@@ -81,6 +81,35 @@ class ProcessPaymentUseCase:
             # don't fail the confirmation if receipt generation/upload fails
             pass
 
+        # Update student fee clearance flags upon successful payment
+        if updated and getattr(updated, "student_id", None):
+            try:
+                from app.infrastructure.database.repositories.student_repository import StudentRepository
+                student_repo = StudentRepository()
+                tenant_id = getattr(updated, "tenant_id", "default")
+                student = await student_repo.get_by_student_id(tenant_id, updated.student_id)
+                if not student:
+                    # try finding student by user_id or id
+                    all_students = await student_repo.get_all(tenant_id=tenant_id)
+                    for s in all_students:
+                        if s.student_id == updated.student_id or str(s.id) == updated.student_id:
+                            student = s
+                            break
+
+                if student:
+                    ft = (getattr(updated, "fee_type", "") or "").lower()
+                    updates = {}
+                    if ft in ["hostel", "hostel_fee", "hostel_fees", "accommodation"]:
+                        updates["hostel_fee_paid"] = True
+                    elif ft in ["tuition", "school_fees", "school_fee", "academic"]:
+                        updates["school_fee_paid"] = True
+                        new_bal = max(0.0, getattr(student, "fee_balance", 0.0) - float(updated.amount))
+                        updates["fee_balance"] = new_bal
+                    if updates:
+                        await student_repo.update(str(student.id), updates)
+            except Exception:
+                pass
+
         return {
             "payment_id": payment_id,
             "status": "success",

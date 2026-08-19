@@ -62,9 +62,12 @@ class Student(Document):
 
     hall_id: Optional[str] = None
     room_id: Optional[str] = None
+    housing_status: Optional[str] = "unassigned"  # school_hostel, outside_hostel, private_renting, unassigned
     registered_courses: List[str] = []
 
     fee_balance: float = 0.0
+    school_fee_paid: bool = False
+    hostel_fee_paid: bool = False
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

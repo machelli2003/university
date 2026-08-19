@@ -1,3 +1,4 @@
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from app.config import get_settings
@@ -39,6 +40,7 @@ async def init_db():
         serverSelectionTimeoutMS=10000,
         connectTimeoutMS=10000,
         socketTimeoutMS=20000,
+        tlsCAFile=certifi.where(),
         tlsAllowInvalidCertificates=True,
     )
     db = client[settings.MONGODB_DB]

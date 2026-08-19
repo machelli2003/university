@@ -69,6 +69,21 @@ class BaseRepository(Generic[T]):
     async def exists(self, **kwargs) -> bool:
         return await self.model.find_one(kwargs) is not None
 
+    async def find_many(self, query: Optional[Dict[str, Any]] = None, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """Query documents with a raw MongoDB filter dict and return as plain dicts."""
+        q = query or {}
+        docs = await self.model.find(q).skip(skip).limit(limit).to_list(None)
+        result = []
+        for doc in docs:
+            try:
+                d = doc.model_dump()
+            except AttributeError:
+                d = doc.dict()
+            # Ensure _id is a plain string
+            d["_id"] = str(doc.id) if hasattr(doc, "id") else d.get("id", "")
+            result.append(d)
+        return result
+
     async def find_paginated(self, skip: int = 0, limit: int = 10, **filters):
         query = self.model.find(filters)
         total = await query.count()

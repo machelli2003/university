@@ -17,37 +17,109 @@ router = APIRouter()
 
 @router.get("/officer/dashboard/hostel")
 async def get_hostel_dashboard(
-    current_user: User = Depends(require_roles("hostel_administrator", "hostel_admin", "university_admin", "super_admin")),
+    current_user: User = Depends(require_roles(
+        "hostel_administrator", "hostel_admin", "hostel_manager", "hostel_officer",
+        "accommodation_officer", "housing_officer", "university_admin", "super_admin"
+    )),
 ):
     """
     Item 47: Hostel Admin Dashboard
-    Returns hall occupancy, allocations, and maintenance data.
+    Returns hall occupancy, allocations, and maintenance data from the live database.
     """
-    tenant_id = str(current_user.tenant_id)
-    
+    tenant_id = current_user.tenant_id or "default"
+
+    total_hostels = 0
+    total_beds = 0
+    occupied_beds = 0
+    hostels_list = []
+    maintenance_list = []
+    bed_requests_list = []
+
+    from app.infrastructure.database.repositories.accommodation_repository import (
+        HallRepository, RoomRepository, MaintenanceRequestRepository, AccommodationRepository
+    )
+    from app.infrastructure.database.repositories.student_repository import StudentRepository
+
+    hall_repo = HallRepository()
+    room_repo = RoomRepository()
+    maint_repo = MaintenanceRequestRepository()
+    acc_repo = AccommodationRepository()
+    student_repo = StudentRepository()
+
+    halls = await hall_repo.get_all_for_tenant(tenant_id)
+    total_hostels = len(halls)
+
+    for h in halls:
+        rooms = await room_repo.get_by_hall(str(h.id))
+        h_cap = sum(getattr(r, "capacity", 0) for r in rooms) or getattr(h, "capacity", 0)
+        h_occ = sum(getattr(r, "occupied", 0) for r in rooms)
+        total_beds += h_cap
+        occupied_beds += h_occ
+        hostels_list.append({
+            "hostel_id": str(h.id),
+            "hostel_name": h.name,
+            "total_beds": h_cap,
+            "occupied_beds": h_occ,
+        })
+
+    maints = await maint_repo.get_all(tenant_id=tenant_id)
+    for m in maints:
+        hall_name = getattr(m, "hall_id", "")
+        try:
+            hall_doc = await hall_repo.get_by_id(m.hall_id)
+            if hall_doc:
+                hall_name = hall_doc.name
+        except Exception:
+            pass
+        maintenance_list.append({
+            "request_id": str(m.id),
+            "hostel_name": hall_name or "Unknown Hall",
+            "issue": getattr(m, "issue_description", ""),
+            "status": getattr(m, "status", "pending"),
+            "submitted_date": str(getattr(m, "created_date", datetime.utcnow())).split("T")[0],
+        })
+
+    accommodations = await acc_repo.model.find_all().to_list(None)
+    for acc in accommodations:
+        st = None
+        try:
+            st = await student_repo.get_by_student_id(tenant_id, acc.student_id)
+            if not st:
+                all_st = await student_repo.get_all(tenant_id=tenant_id)
+                for s in all_st:
+                    if s.student_id == acc.student_id or str(s.id) == acc.student_id:
+                        st = s
+                        break
+        except Exception:
+            pass
+        st_name = f"{st.first_name} {st.last_name}" if st else f"Student #{acc.student_id[:8]}"
+        pref = acc.outside_hostel_name or acc.private_address or "On-Campus Hostel"
+        if acc.hall_id:
+            try:
+                hall_doc = await hall_repo.get_by_id(acc.hall_id)
+                if hall_doc:
+                    pref = hall_doc.name
+            except Exception:
+                pass
+        bed_requests_list.append({
+            "request_id": str(acc.id),
+            "student_name": st_name,
+            "hostel_preference": pref,
+            "status": "approved" if acc.is_active else "pending",
+        })
+
+    occupancy_rate = (occupied_beds / total_beds * 100) if total_beds > 0 else 0.0
+
     return {
-        "total_hostels": 4,
-        "total_beds": 400,
-        "occupied_beds": 340,
-        "occupancy_rate": 85.0,
-        "pending_requests": 12,
-        "pending_maintenance": 5,
-        "hostels": [
-            {"hostel_id": "h-01", "hostel_name": "Nelson Mandela Hall", "total_beds": 100, "occupied_beds": 95},
-            {"hostel_id": "h-02", "hostel_name": "Kwame Nkrumah Hall", "total_beds": 100, "occupied_beds": 82},
-            {"hostel_id": "h-03", "hostel_name": "Kofi Annan Hall", "total_beds": 100, "occupied_beds": 88},
-            {"hostel_id": "h-04", "hostel_name": "W.E.B. DuBois Hall", "total_beds": 100, "occupied_beds": 75},
-        ],
-        "maintenance_requests": [
-            {"request_id": "MAINT-001", "hostel_name": "Nelson Mandela Hall", "issue": "Plumbing repair in Block A", "status": "pending", "submitted_date": "2026-08-15"},
-            {"request_id": "MAINT-002", "hostel_name": "Kwame Nkrumah Hall", "issue": "Electrical socket replacement", "status": "in-progress", "submitted_date": "2026-08-16"},
-            {"request_id": "MAINT-003", "hostel_name": "Kofi Annan Hall", "issue": "AC maintenance in room 204", "status": "completed", "submitted_date": "2026-08-14"},
-        ],
-        "bed_requests": [
-            {"request_id": "REQ-001", "student_name": "Kofi Mensah", "hostel_preference": "Nelson Mandela Hall", "status": "pending"},
-            {"request_id": "REQ-002", "student_name": "Ama Serwaa", "hostel_preference": "Kwame Nkrumah Hall", "status": "approved"},
-            {"request_id": "REQ-003", "student_name": "Kwaku Addo", "hostel_preference": "Kofi Annan Hall", "status": "rejected"},
-        ]
+        "total_hostels": total_hostels,
+        "total_beds": total_beds,
+        "occupied_beds": occupied_beds,
+        "occupancy_rate": occupancy_rate,
+        "pending_requests": len([m for m in maintenance_list if m.get("status") == "pending"]),
+        "pending_maintenance": len([m for m in maintenance_list if m.get("status") == "pending"]),
+        "hostels": hostels_list,
+        "maintenance_requests": maintenance_list,
+        "bed_requests": bed_requests_list,
     }
 
 

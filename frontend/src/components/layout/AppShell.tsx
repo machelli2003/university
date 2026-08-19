@@ -91,8 +91,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Payments", path: "/finance/payments", icon: <Wallet className="h-4 w-4" />, roles: ["finance_officer"] },
 
   // HOSTEL ADMINISTRATOR
-  { label: "Hostel Workspace", path: "/officer/dashboard/hostel", icon: <Building2 className="h-4 w-4" />, roles: ["hostel_administrator"] },
-  { label: "Hostel Management", path: "/hostel", icon: <Building2 className="h-4 w-4" />, roles: ["hostel_administrator"] },
+  { label: "Hostel Workspace", path: "/officer/dashboard/hostel", icon: <Building2 className="h-4 w-4" />, roles: ["hostel_administrator", "hostel_admin", "hostel_manager", "hostel_officer", "accommodation_officer", "housing_officer"] },
+  { label: "Hostel Management", path: "/hostel", icon: <Building2 className="h-4 w-4" />, roles: ["hostel_administrator", "hostel_admin", "hostel_manager", "hostel_officer", "accommodation_officer", "housing_officer"] },
 
   // LIBRARIAN
   { label: "Library Workspace", path: "/officer/dashboard/librarian", icon: <LibraryIcon className="h-4 w-4" />, roles: ["librarian"] },

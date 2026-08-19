@@ -1,5 +1,5 @@
 import { apiClient } from "./client"
-import type { Hall, Room, AllocateRoomRequest, MaintenanceRequestCreate, MaintenanceRequestItem, OccupancySummaryResponse, RoomOccupantResponse } from "@/types/accommodation"
+import type { Hall, Room, AllocateRoomRequest, MaintenanceRequestCreate, MaintenanceRequestItem, OccupancySummaryResponse, RoomOccupantResponse, HousingSelectionRequest, StudentHousingStatusResponse } from "@/types/accommodation"
 
 export const accommodationApi = {
   listHalls: async (): Promise<Hall[]> => {
@@ -59,6 +59,16 @@ export const accommodationApi = {
 
   resolveMaintenance: async (maintenanceId: string) => {
     const res = await apiClient.post(`/accommodation/maintenance/${maintenanceId}/resolve`)
+    return res.data
+  },
+
+  getMyHousing: async (): Promise<StudentHousingStatusResponse> => {
+    const res = await apiClient.get("/accommodation/my-housing")
+    return res.data
+  },
+
+  selectHousing: async (data: HousingSelectionRequest) => {
+    const res = await apiClient.post("/accommodation/select-housing", data)
     return res.data
   },
 }

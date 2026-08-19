@@ -13,8 +13,12 @@ Critical Path Tests:
 """
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 from app.main import app
+from app.infrastructure.models.user import User, RoleEnum
+from app.application.auth.login import AuthService
+from app.infrastructure.database.repositories.user_repository import UserRepository
 from datetime import datetime, timedelta
 import asyncio
 
@@ -63,10 +67,36 @@ TEST_LECTURER = {
 }
 
 
+@pytest.fixture(autouse=True)
+def setup_super_admin():
+    async def seed():
+        existing = await User.find_one({"email": TEST_SUPER_ADMIN["email"]})
+        if not existing:
+            auth_service = AuthService(UserRepository())
+            user = User(
+                tenant_id="test-tenant",
+                email=TEST_SUPER_ADMIN["email"],
+                first_name=TEST_SUPER_ADMIN["first_name"],
+                last_name=TEST_SUPER_ADMIN["last_name"],
+                password_hash=auth_service.hash_password(TEST_SUPER_ADMIN["password"]),
+                role=RoleEnum.SUPER_ADMIN,
+                is_active=True,
+                is_verified=True,
+                must_change_password=False,
+            )
+            await user.insert()
+    
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        asyncio.create_task(seed())
+    else:
+        loop.run_until_complete(seed())
+
+
 class TestAuthenticationAndAuthorization:
     """Test authentication and role-based authorization."""
     
-    def test_user_login_success(self):
+    def test_user_login_success(self, setup_super_admin):
         """Test successful user login."""
         response = client.post(
             "/api/v1/auth/login",

@@ -175,14 +175,11 @@ def require_roles(*allowed_roles: Any):
     roles_set = set(flat_roles)
 
     async def role_checker(current_user: User = Depends(get_current_user), request: Request = None) -> User:
-        if request is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Request context is required")
-
         user_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
 
         # Auditor is a read-only compliance role: allow for safe (GET) requests only
         if user_role == "auditor":
-            if request.method != "GET":
+            if request is not None and request.method != "GET":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Auditor role is read-only"

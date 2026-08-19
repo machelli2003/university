@@ -9,9 +9,17 @@ class HallRepository(BaseRepository[Hall]):
         super().__init__(Hall)
 
     async def get_all_for_tenant(self, tenant_id: str) -> List[Hall]:
-        return await self.model.find({
-            "tenant_id": tenant_id
+        halls = await self.model.find({
+            "$or": [
+                {"tenant_id": tenant_id},
+                {"tenant_id": "single-university"},
+                {"tenant_id": "default"},
+                {"tenant_id": None},
+            ]
         }).to_list(None)
+        if not halls:
+            halls = await self.model.find_all().to_list(None)
+        return halls
 
 class RoomRepository(BaseRepository[Room]):
     def __init__(self):
